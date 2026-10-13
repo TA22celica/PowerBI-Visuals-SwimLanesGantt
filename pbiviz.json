@@ -6,8 +6,8 @@
     "visualClassName": "Visual",
     "version": "1.0.0.0",
     "description": "Swim Lane Gantt visual",
-    "supportUrl": "https://github.com/microsoft/PowerBI-Visuals-SwimLanesGantt/issues",
-    "gitHubUrl": "https://github.com/microsoft/PowerBI-Visuals-SwimLanesGantt"
+    "supportUrl": "https://github.com/TA22celica/PowerBI-Visuals-SwimLanesGantt/issues",
+    "gitHubUrl": "https://github.com/TA22celica/PowerBI-Visuals-SwimLanesGantt"
   },
   "apiVersion": "5.11.1",
   "author": {
