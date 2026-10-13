@@ -1,0 +1,25 @@
+{
+  "visual": {
+    "name": "SwimLanesGantt",
+    "displayName": "Swim Lanes Gantt",
+    "guid": "swimLanesGantt_D9B4F1A28C734E12",
+    "visualClassName": "Visual",
+    "version": "1.0.0.0",
+    "description": "Swim Lane Gantt visual",
+    "supportUrl": "https://github.com/microsoft/PowerBI-Visuals-SwimLanesGantt/issues",
+    "gitHubUrl": "https://github.com/microsoft/PowerBI-Visuals-SwimLanesGantt"
+  },
+  "apiVersion": "5.11.1",
+  "author": {
+    "name": "Mike Sheppard",
+    "email": "mike@threadworkdata.com"
+  },
+  "assets": {
+    "icon": "assets/icon.png"
+  },
+  "externalJS": null,
+  "style": "style/visual.less",
+  "capabilities": "capabilities.json",
+  "dependencies": null,
+  "stringResources": []
+}

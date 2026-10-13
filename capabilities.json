@@ -1,0 +1,408 @@
+{
+  "privileges": [],
+  "sorting": {
+    "default": {}
+  },
+  "dataRoles": [
+    {
+      "displayName": "Location / Facility",
+      "name": "location",
+      "kind": "Grouping"
+    },
+    {
+      "displayName": "Provider Name",
+      "name": "provider",
+      "kind": "Grouping"
+    },
+    {
+      "displayName": "Schedule Event Category",
+      "name": "category",
+      "kind": "Grouping"
+    },
+    {
+      "displayName": "Shift Start (Date/Time)",
+      "name": "startDate",
+      "kind": "Grouping"
+    },
+    {
+      "displayName": "Shift End (Date/Time)",
+      "name": "endDate",
+      "kind": "Grouping"
+    },
+    {
+      "displayName": "Case Count",
+      "name": "caseCount",
+      "kind": "Measure"
+    },
+    {
+      "displayName": "Additional Metric (e.g. Units/Hours)",
+      "name": "extraMetric",
+      "kind": "Measure"
+    }
+  ],
+  "dataViewMappings": [
+    {
+      "categorical": {
+        "categories": {
+          "select": [
+            { "bind": { "to": "location" } },
+            { "bind": { "to": "provider" } },
+            { "bind": { "to": "category" } },
+            { "bind": { "to": "startDate" } },
+            { "bind": { "to": "endDate" } }
+          ]
+        },
+        "values": {
+          "select": [
+            { "bind": { "to": "caseCount" } },
+            { "bind": { "to": "extraMetric" } }
+          ]
+        }
+      }
+    }
+  ],
+  "objects": {
+    "colorPaletteSettings": {
+      "displayName": "Colors & Themes",
+      "properties": {
+        "palette": {
+          "displayName": "Color Palette",
+          "type": {
+            "enumeration": [
+              { "value": "powerBi", "displayName": "Power BI Report Theme" },
+              { "value": "tableau10", "displayName": "Tableau 10" },
+              { "value": "category10", "displayName": "Category 10" },
+              { "value": "paired", "displayName": "Paired" },
+              { "value": "accent", "displayName": "Accent" },
+              { "value": "dark2", "displayName": "Dark 2" },
+              { "value": "set2", "displayName": "Set 2" }
+            ]
+          }
+        }
+      }
+    },
+    "legendSettings": {
+      "displayName": "Legend",
+      "properties": {
+        "show": {
+          "displayName": "Show Legend",
+          "type": { "bool": true }
+        },
+        "position": {
+          "displayName": "Position",
+          "type": {
+            "enumeration": [
+              { "value": "Top", "displayName": "Top" },
+              { "value": "Bottom", "displayName": "Bottom" },
+              { "value": "Left", "displayName": "Left" },
+              { "value": "Right", "displayName": "Right" }
+            ]
+          }
+        },
+        "fontSize": {
+          "displayName": "Text Size",
+          "type": { "formatting": { "fontSize": true } }
+        },
+        "fontColor": {
+          "displayName": "Text Color",
+          "type": { "fill": { "solid": { "color": true } } }
+        }
+      }
+    },
+    "swimlaneSettings": {
+      "displayName": "Swimlanes & Rows",
+      "properties": {
+        "rowHeight": {
+          "displayName": "Row Height (px)",
+          "type": { "numeric": true }
+        },
+        "barHeightPercent": {
+          "displayName": "Bar Thickness (%)",
+          "type": { "numeric": true }
+        },
+        "providerColumnWidth": {
+          "displayName": "Provider Column Width (px)",
+          "type": { "numeric": true }
+        },
+        "providerFontSize": {
+          "displayName": "Provider Font Size",
+          "type": { "formatting": { "fontSize": true } }
+        },
+        "providerFontColor": {
+          "displayName": "Provider Font Color",
+          "type": { "fill": { "solid": { "color": true } } }
+        },
+        "showZebraStriping": {
+          "displayName": "Alternating Row Fills",
+          "type": { "bool": true }
+        },
+        "evenRowColor": {
+          "displayName": "Even Row Background",
+          "type": { "fill": { "solid": { "color": true } } }
+        },
+        "oddRowColor": {
+          "displayName": "Odd Row Background",
+          "type": { "fill": { "solid": { "color": true } } }
+        },
+        "showRowBorders": {
+          "displayName": "Show Row Dividers",
+          "type": { "bool": true }
+        },
+        "rowBorderColor": {
+          "displayName": "Divider Color",
+          "type": { "fill": { "solid": { "color": true } } }
+        }
+      }
+    },
+    "locationHeaderSettings": {
+      "displayName": "Location Headers",
+      "properties": {
+        "showHeader": {
+          "displayName": "Show Location Header",
+          "type": { "bool": true }
+        },
+        "headerHeight": {
+          "displayName": "Header Height (px)",
+          "type": { "numeric": true }
+        },
+        "headerFontSize": {
+          "displayName": "Header Font Size",
+          "type": { "formatting": { "fontSize": true } }
+        },
+        "headerFontColor": {
+          "displayName": "Header Font Color",
+          "type": { "fill": { "solid": { "color": true } } }
+        },
+        "headerBgColor": {
+          "displayName": "Header Background Fill",
+          "type": { "fill": { "solid": { "color": true } } }
+        },
+        "showCaseBadge": {
+          "displayName": "Show Location Case Total Badge",
+          "type": { "bool": true }
+        },
+        "badgeBgColor": {
+          "displayName": "Badge Background Color",
+          "type": { "fill": { "solid": { "color": true } } }
+        },
+        "badgeTextColor": {
+          "displayName": "Badge Text Color",
+          "type": { "fill": { "solid": { "color": true } } }
+        }
+      }
+    },
+    "barSettings": {
+      "displayName": "Gantt Bars & Concurrency",
+      "properties": {
+        "barOpacity": {
+          "displayName": "Bar Opacity (%)",
+          "type": { "numeric": true }
+        },
+        "barCornerRadius": {
+          "displayName": "Corner Radius (px)",
+          "type": { "numeric": true }
+        },
+        "showBorder": {
+          "displayName": "Show Bar Border",
+          "type": { "bool": true }
+        },
+        "borderColor": {
+          "displayName": "Border Color",
+          "type": { "fill": { "solid": { "color": true } } }
+        },
+        "borderWidth": {
+          "displayName": "Border Width (px)",
+          "type": { "numeric": true }
+        },
+        "showCaseNotches": {
+          "displayName": "Show Micro Case Ticks in Bar",
+          "type": { "bool": true }
+        },
+        "overlapMode": {
+          "displayName": "Concurrent Shifts Mode",
+          "type": {
+            "enumeration": [
+              { "value": "stagger", "displayName": "Stagger Vertically (Sub-rows)" },
+              { "value": "overlay", "displayName": "Overlay Translucent" }
+            ]
+          }
+        }
+      }
+    },
+    "caseLabelSettings": {
+      "displayName": "Case Data Labels & Badges",
+      "properties": {
+        "show": {
+          "displayName": "Show Case Labels",
+          "type": { "bool": true }
+        },
+        "labelPosition": {
+          "displayName": "Position",
+          "type": {
+            "enumeration": [
+              { "value": "pillBadge", "displayName": "Floating Pill Badge" },
+              { "value": "insideCenter", "displayName": "Centered Text Inside Bar" },
+              { "value": "right", "displayName": "Trailing (End of Bar)" },
+              { "value": "above", "displayName": "Above Bar" }
+            ]
+          }
+        },
+        "labelContent": {
+          "displayName": "Label Content",
+          "type": {
+            "enumeration": [
+              { "value": "casesOnly", "displayName": "Cases Only" },
+              { "value": "casesAndHours", "displayName": "Cases + Shift Duration" },
+              { "value": "hoursOnly", "displayName": "Shift Duration Only" }
+            ]
+          }
+        },
+        "fontSize": {
+          "displayName": "Font Size",
+          "type": { "formatting": { "fontSize": true } }
+        },
+        "fontColor": {
+          "displayName": "Font Color",
+          "type": { "fill": { "solid": { "color": true } } }
+        },
+        "badgeBgColor": {
+          "displayName": "Pill Badge Fill Color",
+          "type": { "fill": { "solid": { "color": true } } }
+        },
+        "prefix": {
+          "displayName": "Prefix",
+          "type": {
+            "enumeration": [
+              { "value": "none", "displayName": "None" },
+              { "value": "Cases: ", "displayName": "Cases: " },
+              { "value": "c: ", "displayName": "c: " },
+              { "value": "#", "displayName": "#" }
+            ]
+          }
+        },
+        "suffix": {
+          "displayName": "Suffix",
+          "type": {
+            "enumeration": [
+              { "value": "none", "displayName": "None" },
+              { "value": " cases", "displayName": " cases" },
+              { "value": " cs", "displayName": " cs" }
+            ]
+          }
+        }
+      }
+    },
+    "timeAxisSettings": {
+      "displayName": "Timeline & Time Window",
+      "properties": {
+        "timeFormat": {
+          "displayName": "Time Axis Format",
+          "type": {
+            "enumeration": [
+              { "value": "auto", "displayName": "Adaptive Auto" },
+              { "value": "12hour", "displayName": "12-Hour (7:00 AM)" },
+              { "value": "24hour", "displayName": "24-Hour (07:00)" },
+              { "value": "dateTimeShort", "displayName": "Date + Time (Oct 13, 07:00)" }
+            ]
+          }
+        },
+        "clampToSurgicalDay": {
+          "displayName": "Clamp to Daily Surgical Hours",
+          "type": { "bool": true }
+        },
+        "dayStartHour": {
+          "displayName": "Day Start Hour (0-23)",
+          "type": { "numeric": true }
+        },
+        "dayEndHour": {
+          "displayName": "Day End Hour (1-24)",
+          "type": { "numeric": true }
+        },
+        "fontSize": {
+          "displayName": "Font Size",
+          "type": { "formatting": { "fontSize": true } }
+        },
+        "fontColor": {
+          "displayName": "Font Color",
+          "type": { "fill": { "solid": { "color": true } } }
+        },
+        "showGridlines": {
+          "displayName": "Show Vertical Gridlines",
+          "type": { "bool": true }
+        },
+        "gridlineColor": {
+          "displayName": "Gridline Color",
+          "type": { "fill": { "solid": { "color": true } } }
+        }
+      }
+    },
+    "referenceLineSettings": {
+      "displayName": "Shift & Time Reference Lines",
+      "properties": {
+        "showNowLine": {
+          "displayName": "Show 'Current Time' Indicator",
+          "type": { "bool": true }
+        },
+        "nowLineColor": {
+          "displayName": "Now Indicator Color",
+          "type": { "fill": { "solid": { "color": true } } }
+        },
+        "showShiftChangeLines": {
+          "displayName": "Shift Turnover Lines (07:00/15:00/19:00)",
+          "type": { "bool": true }
+        },
+        "shiftChangeColor": {
+          "displayName": "Shift Turnover Line Color",
+          "type": { "fill": { "solid": { "color": true } } }
+        }
+      }
+    },
+    "overtimeSettings": {
+      "displayName": "Overtime & Shift Alerts",
+      "properties": {
+        "highlightLongShifts": {
+          "displayName": "Flag Extended Shifts",
+          "type": { "bool": true }
+        },
+        "thresholdHours": {
+          "displayName": "Shift Threshold (Hours)",
+          "type": { "numeric": true }
+        },
+        "warningBorderColor": {
+          "displayName": "Alert Border Color",
+          "type": { "fill": { "solid": { "color": true } } }
+        }
+      }
+    },
+    "sortSettings": {
+      "displayName": "Sorting & Order",
+      "properties": {
+        "locationSort": {
+          "displayName": "Location Order",
+          "type": {
+            "enumeration": [
+              { "value": "natural", "displayName": "Data Model Order" },
+              { "value": "asc", "displayName": "Alphabetical (A-Z)" },
+              { "value": "desc", "displayName": "Alphabetical (Z-A)" },
+              { "value": "caseDesc", "displayName": "Highest Total Cases First" },
+              { "value": "caseAsc", "displayName": "Lowest Total Cases First" }
+            ]
+          }
+        },
+        "providerSort": {
+          "displayName": "Provider Order",
+          "type": {
+            "enumeration": [
+              { "value": "natural", "displayName": "Data Model Order" },
+              { "value": "asc", "displayName": "Alphabetical (A-Z)" },
+              { "value": "desc", "displayName": "Alphabetical (Z-A)" },
+              { "value": "caseDesc", "displayName": "Most Cases First" },
+              { "value": "caseAsc", "displayName": "Fewest Cases First" },
+              { "value": "startAsc", "displayName": "Earliest Shift First" }
+            ]
+          }
+        }
+      }
+    }
+  }
+}
