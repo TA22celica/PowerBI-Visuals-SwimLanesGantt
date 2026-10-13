@@ -5,38 +5,38 @@
   },
   "dataRoles": [
     {
-      "displayName": "Location / Facility",
-      "name": "location",
+      "displayName": "Group / Swimlane (e.g. Facility, Project)",
+      "name": "group",
       "kind": "Grouping"
     },
     {
-      "displayName": "Provider Name",
-      "name": "provider",
+      "displayName": "Item / Resource (e.g. Provider, Machine, Task)",
+      "name": "item",
       "kind": "Grouping"
     },
     {
-      "displayName": "Schedule Event Category",
+      "displayName": "Category / Status (e.g. Shift Type, Phase)",
       "name": "category",
       "kind": "Grouping"
     },
     {
-      "displayName": "Shift Start (Date/Time)",
+      "displayName": "Start Date / Time",
       "name": "startDate",
       "kind": "Grouping"
     },
     {
-      "displayName": "Shift End (Date/Time)",
+      "displayName": "End Date / Time",
       "name": "endDate",
       "kind": "Grouping"
     },
     {
-      "displayName": "Case Count",
-      "name": "caseCount",
+      "displayName": "Primary Metric / Count (e.g. Cases, Output)",
+      "name": "primaryMetric",
       "kind": "Measure"
     },
     {
-      "displayName": "Additional Metric (e.g. Units/Hours)",
-      "name": "extraMetric",
+      "displayName": "Secondary Metric (e.g. Units, Hours, Cost)",
+      "name": "secondaryMetric",
       "kind": "Measure"
     }
   ],
@@ -45,8 +45,8 @@
       "categorical": {
         "categories": {
           "select": [
-            { "bind": { "to": "location" } },
-            { "bind": { "to": "provider" } },
+            { "bind": { "to": "group" } },
+            { "bind": { "to": "item" } },
             { "bind": { "to": "category" } },
             { "bind": { "to": "startDate" } },
             { "bind": { "to": "endDate" } }
@@ -54,8 +54,8 @@
         },
         "values": {
           "select": [
-            { "bind": { "to": "caseCount" } },
-            { "bind": { "to": "extraMetric" } }
+            { "bind": { "to": "primaryMetric" } },
+            { "bind": { "to": "secondaryMetric" } }
           ]
         }
       }
@@ -66,10 +66,10 @@
       "displayName": "Colors & Themes",
       "properties": {
         "palette": {
-          "displayName": "Color Palette",
+          "displayName": "Theme Palette",
           "type": {
             "enumeration": [
-              { "value": "powerBi", "displayName": "Power BI Report Theme" },
+              { "value": "powerBi", "displayName": "Power BI Theme" },
               { "value": "tableau10", "displayName": "Tableau 10" },
               { "value": "category10", "displayName": "Category 10" },
               { "value": "paired", "displayName": "Paired" },
@@ -110,7 +110,7 @@
       }
     },
     "swimlaneSettings": {
-      "displayName": "Swimlanes & Rows",
+      "displayName": "Swimlanes & Layout",
       "properties": {
         "rowHeight": {
           "displayName": "Row Height (px)",
@@ -120,16 +120,16 @@
           "displayName": "Bar Thickness (%)",
           "type": { "numeric": true }
         },
-        "providerColumnWidth": {
-          "displayName": "Provider Column Width (px)",
+        "resourceColumnWidth": {
+          "displayName": "Resource Column Width (px)",
           "type": { "numeric": true }
         },
-        "providerFontSize": {
-          "displayName": "Provider Font Size",
+        "resourceFontSize": {
+          "displayName": "Resource Font Size",
           "type": { "formatting": { "fontSize": true } }
         },
-        "providerFontColor": {
-          "displayName": "Provider Font Color",
+        "resourceFontColor": {
+          "displayName": "Resource Font Color",
           "type": { "fill": { "solid": { "color": true } } }
         },
         "showZebraStriping": {
@@ -154,11 +154,11 @@
         }
       }
     },
-    "locationHeaderSettings": {
-      "displayName": "Location Headers",
+    "groupHeaderSettings": {
+      "displayName": "Group Headers",
       "properties": {
         "showHeader": {
-          "displayName": "Show Location Header",
+          "displayName": "Show Group Header",
           "type": { "bool": true }
         },
         "headerHeight": {
@@ -177,8 +177,8 @@
           "displayName": "Header Background Fill",
           "type": { "fill": { "solid": { "color": true } } }
         },
-        "showCaseBadge": {
-          "displayName": "Show Location Case Total Badge",
+        "showMetricBadge": {
+          "displayName": "Show Group Total Badge",
           "type": { "bool": true }
         },
         "badgeBgColor": {
@@ -214,12 +214,12 @@
           "displayName": "Border Width (px)",
           "type": { "numeric": true }
         },
-        "showCaseNotches": {
-          "displayName": "Show Micro Case Ticks in Bar",
+        "showMetricNotches": {
+          "displayName": "Show Micro Metric Ticks",
           "type": { "bool": true }
         },
         "overlapMode": {
-          "displayName": "Concurrent Shifts Mode",
+          "displayName": "Concurrent Overlap Mode",
           "type": {
             "enumeration": [
               { "value": "stagger", "displayName": "Stagger Vertically (Sub-rows)" },
@@ -229,11 +229,11 @@
         }
       }
     },
-    "caseLabelSettings": {
-      "displayName": "Case Data Labels & Badges",
+    "labelSettings": {
+      "displayName": "Data Labels & Badges",
       "properties": {
         "show": {
-          "displayName": "Show Case Labels",
+          "displayName": "Show Data Labels",
           "type": { "bool": true }
         },
         "labelPosition": {
@@ -251,9 +251,9 @@
           "displayName": "Label Content",
           "type": {
             "enumeration": [
-              { "value": "casesOnly", "displayName": "Cases Only" },
-              { "value": "casesAndHours", "displayName": "Cases + Shift Duration" },
-              { "value": "hoursOnly", "displayName": "Shift Duration Only" }
+              { "value": "metricOnly", "displayName": "Primary Metric Only" },
+              { "value": "metricAndDuration", "displayName": "Metric + Duration" },
+              { "value": "durationOnly", "displayName": "Duration Only" }
             ]
           }
         },
@@ -274,8 +274,8 @@
           "type": {
             "enumeration": [
               { "value": "none", "displayName": "None" },
-              { "value": "Cases: ", "displayName": "Cases: " },
-              { "value": "c: ", "displayName": "c: " },
+              { "value": "Count: ", "displayName": "Count: " },
+              { "value": "Qty: ", "displayName": "Qty: " },
               { "value": "#", "displayName": "#" }
             ]
           }
@@ -286,28 +286,29 @@
             "enumeration": [
               { "value": "none", "displayName": "None" },
               { "value": " cases", "displayName": " cases" },
-              { "value": " cs", "displayName": " cs" }
+              { "value": " units", "displayName": " units" },
+              { "value": " tasks", "displayName": " tasks" }
             ]
           }
         }
       }
     },
     "timeAxisSettings": {
-      "displayName": "Timeline & Time Window",
+      "displayName": "Timeline & Window Clamping",
       "properties": {
         "timeFormat": {
           "displayName": "Time Axis Format",
           "type": {
             "enumeration": [
               { "value": "auto", "displayName": "Adaptive Auto" },
-              { "value": "12hour", "displayName": "12-Hour (7:00 AM)" },
-              { "value": "24hour", "displayName": "24-Hour (07:00)" },
+              { "value": "12hour", "displayName": "12-Hour (e.g. 7:00 AM)" },
+              { "value": "24hour", "displayName": "24-Hour (e.g. 07:00)" },
               { "value": "dateTimeShort", "displayName": "Date + Time (Oct 13, 07:00)" }
             ]
           }
         },
-        "clampToSurgicalDay": {
-          "displayName": "Clamp to Daily Surgical Hours",
+        "clampToDailyWindow": {
+          "displayName": "Clamp to Daily Window",
           "type": { "bool": true }
         },
         "dayStartHour": {
@@ -337,35 +338,35 @@
       }
     },
     "referenceLineSettings": {
-      "displayName": "Shift & Time Reference Lines",
+      "displayName": "Reference Lines & Markers",
       "properties": {
         "showNowLine": {
           "displayName": "Show 'Current Time' Indicator",
           "type": { "bool": true }
         },
         "nowLineColor": {
-          "displayName": "Now Indicator Color",
+          "displayName": "Current Time Color",
           "type": { "fill": { "solid": { "color": true } } }
         },
-        "showShiftChangeLines": {
-          "displayName": "Shift Turnover Lines (07:00/15:00/19:00)",
+        "showMilestoneLines": {
+          "displayName": "Show Interval Markers (07:00/15:00/19:00)",
           "type": { "bool": true }
         },
-        "shiftChangeColor": {
-          "displayName": "Shift Turnover Line Color",
+        "milestoneLineColor": {
+          "displayName": "Interval Marker Color",
           "type": { "fill": { "solid": { "color": true } } }
         }
       }
     },
-    "overtimeSettings": {
-      "displayName": "Overtime & Shift Alerts",
+    "thresholdAlertSettings": {
+      "displayName": "Duration & Threshold Alerts",
       "properties": {
-        "highlightLongShifts": {
-          "displayName": "Flag Extended Shifts",
+        "highlightLongIntervals": {
+          "displayName": "Flag Extended Durations",
           "type": { "bool": true }
         },
         "thresholdHours": {
-          "displayName": "Shift Threshold (Hours)",
+          "displayName": "Duration Threshold (Hours)",
           "type": { "numeric": true }
         },
         "warningBorderColor": {
@@ -377,28 +378,28 @@
     "sortSettings": {
       "displayName": "Sorting & Order",
       "properties": {
-        "locationSort": {
-          "displayName": "Location Order",
+        "groupSort": {
+          "displayName": "Group Order",
           "type": {
             "enumeration": [
               { "value": "natural", "displayName": "Data Model Order" },
               { "value": "asc", "displayName": "Alphabetical (A-Z)" },
               { "value": "desc", "displayName": "Alphabetical (Z-A)" },
-              { "value": "caseDesc", "displayName": "Highest Total Cases First" },
-              { "value": "caseAsc", "displayName": "Lowest Total Cases First" }
+              { "value": "metricDesc", "displayName": "Highest Total Metric First" },
+              { "value": "metricAsc", "displayName": "Lowest Total Metric First" }
             ]
           }
         },
-        "providerSort": {
-          "displayName": "Provider Order",
+        "resourceSort": {
+          "displayName": "Resource / Item Order",
           "type": {
             "enumeration": [
               { "value": "natural", "displayName": "Data Model Order" },
               { "value": "asc", "displayName": "Alphabetical (A-Z)" },
               { "value": "desc", "displayName": "Alphabetical (Z-A)" },
-              { "value": "caseDesc", "displayName": "Most Cases First" },
-              { "value": "caseAsc", "displayName": "Fewest Cases First" },
-              { "value": "startAsc", "displayName": "Earliest Shift First" }
+              { "value": "metricDesc", "displayName": "Highest Metric First" },
+              { "value": "metricAsc", "displayName": "Lowest Metric First" },
+              { "value": "startAsc", "displayName": "Earliest Start First" }
             ]
           }
         }

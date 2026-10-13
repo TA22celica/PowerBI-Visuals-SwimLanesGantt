@@ -13,31 +13,31 @@ import VisualObjectInstance = powerbi.VisualObjectInstance;
 import VisualObjectInstanceEnumerationObject = powerbi.VisualObjectInstanceEnumerationObject;
 import * as d3 from "d3";
 
-interface ShiftItem {
+interface ScheduleItem {
     id: string;
-    location: string;
-    provider: string;
+    groupName: string;
+    resourceName: string;
     category: string;
     startDate: Date;
     endDate: Date;
-    caseCount: number;
-    extraMetric: number;
+    primaryMetric: number;
+    secondaryMetric: number;
     subRowIndex: number;
     selectionId: powerbi.visuals.ISelectionId;
 }
 
-interface ProviderRow {
-    providerName: string;
-    shifts: ShiftItem[];
+interface ResourceRow {
+    resourceName: string;
+    items: ScheduleItem[];
     maxSubRows: number;
-    totalCases: number;
-    earliestShift: Date;
+    totalMetric: number;
+    earliestStart: Date;
 }
 
-interface LocationGroup {
-    locationName: string;
-    providers: ProviderRow[];
-    totalCases: number;
+interface GroupSwimlane {
+    groupName: string;
+    resources: ResourceRow[];
+    totalMetric: number;
 }
 
 interface VisualSettings {
@@ -46,22 +46,22 @@ interface VisualSettings {
     swimlaneSettings: {
         rowHeight: number;
         barHeightPercent: number;
-        providerColumnWidth: number;
-        providerFontSize: number;
-        providerFontColor: string;
+        resourceColumnWidth: number;
+        resourceFontSize: number;
+        resourceFontColor: string;
         showZebraStriping: boolean;
         evenRowColor: string;
         oddRowColor: string;
         showRowBorders: boolean;
         rowBorderColor: string;
     };
-    locationHeaderSettings: {
+    groupHeaderSettings: {
         showHeader: boolean;
         headerHeight: number;
         headerFontSize: number;
         headerFontColor: string;
         headerBgColor: string;
-        showCaseBadge: boolean;
+        showMetricBadge: boolean;
         badgeBgColor: string;
         badgeTextColor: string;
     };
@@ -71,10 +71,10 @@ interface VisualSettings {
         showBorder: boolean;
         borderColor: string;
         borderWidth: number;
-        showCaseNotches: boolean;
+        showMetricNotches: boolean;
         overlapMode: string;
     };
-    caseLabelSettings: {
+    labelSettings: {
         show: boolean;
         labelPosition: string;
         labelContent: string;
@@ -86,7 +86,7 @@ interface VisualSettings {
     };
     timeAxisSettings: {
         timeFormat: string;
-        clampToSurgicalDay: boolean;
+        clampToDailyWindow: boolean;
         dayStartHour: number;
         dayEndHour: number;
         fontSize: number;
@@ -97,17 +97,17 @@ interface VisualSettings {
     referenceLineSettings: {
         showNowLine: boolean;
         nowLineColor: string;
-        showShiftChangeLines: boolean;
-        shiftChangeColor: string;
+        showMilestoneLines: boolean;
+        milestoneLineColor: string;
     };
-    overtimeSettings: {
-        highlightLongShifts: boolean;
+    thresholdAlertSettings: {
+        highlightLongIntervals: boolean;
         thresholdHours: number;
         warningBorderColor: string;
     };
     sortSettings: {
-        locationSort: string;
-        providerSort: string;
+        groupSort: string;
+        resourceSort: string;
     };
 }
 
@@ -147,22 +147,22 @@ export class Visual implements IVisual {
             swimlaneSettings: {
                 rowHeight: 38,
                 barHeightPercent: 72,
-                providerColumnWidth: 155,
-                providerFontSize: 10,
-                providerFontColor: "#333333",
+                resourceColumnWidth: 160,
+                resourceFontSize: 10,
+                resourceFontColor: "#333333",
                 showZebraStriping: true,
                 evenRowColor: "#FFFFFF",
                 oddRowColor: "#F8FAFC",
                 showRowBorders: true,
                 rowBorderColor: "#E2E8F0"
             },
-            locationHeaderSettings: {
+            groupHeaderSettings: {
                 showHeader: true,
                 headerHeight: 28,
                 headerFontSize: 11,
                 headerFontColor: "#0F172A",
                 headerBgColor: "#E2E8F0",
-                showCaseBadge: true,
+                showMetricBadge: true,
                 badgeBgColor: "#3B82F6",
                 badgeTextColor: "#FFFFFF"
             },
@@ -172,13 +172,13 @@ export class Visual implements IVisual {
                 showBorder: true,
                 borderColor: "#FFFFFF",
                 borderWidth: 1.5,
-                showCaseNotches: true,
+                showMetricNotches: true,
                 overlapMode: "stagger"
             },
-            caseLabelSettings: {
+            labelSettings: {
                 show: true,
                 labelPosition: "pillBadge",
-                labelContent: "casesOnly",
+                labelContent: "metricOnly",
                 fontSize: 9,
                 fontColor: "#FFFFFF",
                 badgeBgColor: "rgba(15, 23, 42, 0.75)",
@@ -187,7 +187,7 @@ export class Visual implements IVisual {
             },
             timeAxisSettings: {
                 timeFormat: "auto",
-                clampToSurgicalDay: false,
+                clampToDailyWindow: false,
                 dayStartHour: 7,
                 dayEndHour: 19,
                 fontSize: 10,
@@ -198,17 +198,17 @@ export class Visual implements IVisual {
             referenceLineSettings: {
                 showNowLine: true,
                 nowLineColor: "#EF4444",
-                showShiftChangeLines: true,
-                shiftChangeColor: "#94A3B8"
+                showMilestoneLines: true,
+                milestoneLineColor: "#94A3B8"
             },
-            overtimeSettings: {
-                highlightLongShifts: true,
+            thresholdAlertSettings: {
+                highlightLongIntervals: true,
                 thresholdHours: 10,
                 warningBorderColor: "#DC2626"
             },
             sortSettings: {
-                locationSort: "natural",
-                providerSort: "natural"
+                groupSort: "natural",
+                resourceSort: "natural"
             }
         };
     }
@@ -221,12 +221,12 @@ export class Visual implements IVisual {
         const cp = objects["colorPaletteSettings"];
         const leg = objects["legendSettings"];
         const sl = objects["swimlaneSettings"];
-        const lh = objects["locationHeaderSettings"];
+        const gh = objects["groupHeaderSettings"];
         const bar = objects["barSettings"];
-        const cl = objects["caseLabelSettings"];
+        const lbl = objects["labelSettings"];
         const ax = objects["timeAxisSettings"];
         const ref = objects["referenceLineSettings"];
-        const ot = objects["overtimeSettings"];
+        const alrt = objects["thresholdAlertSettings"];
         const srt = objects["sortSettings"];
 
         return {
@@ -240,24 +240,24 @@ export class Visual implements IVisual {
             swimlaneSettings: {
                 rowHeight: sl?.["rowHeight"] !== undefined ? Number(sl["rowHeight"]) : defaults.swimlaneSettings.rowHeight,
                 barHeightPercent: sl?.["barHeightPercent"] !== undefined ? Number(sl["barHeightPercent"]) : defaults.swimlaneSettings.barHeightPercent,
-                providerColumnWidth: sl?.["providerColumnWidth"] !== undefined ? Number(sl["providerColumnWidth"]) : defaults.swimlaneSettings.providerColumnWidth,
-                providerFontSize: sl?.["providerFontSize"] !== undefined ? Number(sl["providerFontSize"]) : defaults.swimlaneSettings.providerFontSize,
-                providerFontColor: (sl?.["providerFontColor"] as { solid?: { color?: string } })?.solid?.color ?? defaults.swimlaneSettings.providerFontColor,
+                resourceColumnWidth: sl?.["resourceColumnWidth"] !== undefined ? Number(sl["resourceColumnWidth"]) : defaults.swimlaneSettings.resourceColumnWidth,
+                resourceFontSize: sl?.["resourceFontSize"] !== undefined ? Number(sl["resourceFontSize"]) : defaults.swimlaneSettings.resourceFontSize,
+                resourceFontColor: (sl?.["resourceFontColor"] as { solid?: { color?: string } })?.solid?.color ?? defaults.swimlaneSettings.resourceFontColor,
                 showZebraStriping: sl?.["showZebraStriping"] !== undefined ? Boolean(sl["showZebraStriping"]) : defaults.swimlaneSettings.showZebraStriping,
                 evenRowColor: (sl?.["evenRowColor"] as { solid?: { color?: string } })?.solid?.color ?? defaults.swimlaneSettings.evenRowColor,
                 oddRowColor: (sl?.["oddRowColor"] as { solid?: { color?: string } })?.solid?.color ?? defaults.swimlaneSettings.oddRowColor,
                 showRowBorders: sl?.["showRowBorders"] !== undefined ? Boolean(sl["showRowBorders"]) : defaults.swimlaneSettings.showRowBorders,
                 rowBorderColor: (sl?.["rowBorderColor"] as { solid?: { color?: string } })?.solid?.color ?? defaults.swimlaneSettings.rowBorderColor
             },
-            locationHeaderSettings: {
-                showHeader: lh?.["showHeader"] !== undefined ? Boolean(lh["showHeader"]) : defaults.locationHeaderSettings.showHeader,
-                headerHeight: lh?.["headerHeight"] !== undefined ? Number(lh["headerHeight"]) : defaults.locationHeaderSettings.headerHeight,
-                headerFontSize: lh?.["headerFontSize"] !== undefined ? Number(lh["headerFontSize"]) : defaults.locationHeaderSettings.headerFontSize,
-                headerFontColor: (lh?.["headerFontColor"] as { solid?: { color?: string } })?.solid?.color ?? defaults.locationHeaderSettings.headerFontColor,
-                headerBgColor: (lh?.["headerBgColor"] as { solid?: { color?: string } })?.solid?.color ?? defaults.locationHeaderSettings.headerBgColor,
-                showCaseBadge: lh?.["showCaseBadge"] !== undefined ? Boolean(lh["showCaseBadge"]) : defaults.locationHeaderSettings.showCaseBadge,
-                badgeBgColor: (lh?.["badgeBgColor"] as { solid?: { color?: string } })?.solid?.color ?? defaults.locationHeaderSettings.badgeBgColor,
-                badgeTextColor: (lh?.["badgeTextColor"] as { solid?: { color?: string } })?.solid?.color ?? defaults.locationHeaderSettings.badgeTextColor
+            groupHeaderSettings: {
+                showHeader: gh?.["showHeader"] !== undefined ? Boolean(gh["showHeader"]) : defaults.groupHeaderSettings.showHeader,
+                headerHeight: gh?.["headerHeight"] !== undefined ? Number(gh["headerHeight"]) : defaults.groupHeaderSettings.headerHeight,
+                headerFontSize: gh?.["headerFontSize"] !== undefined ? Number(gh["headerFontSize"]) : defaults.groupHeaderSettings.headerFontSize,
+                headerFontColor: (gh?.["headerFontColor"] as { solid?: { color?: string } })?.solid?.color ?? defaults.groupHeaderSettings.headerFontColor,
+                headerBgColor: (gh?.["headerBgColor"] as { solid?: { color?: string } })?.solid?.color ?? defaults.groupHeaderSettings.headerBgColor,
+                showMetricBadge: gh?.["showMetricBadge"] !== undefined ? Boolean(gh["showMetricBadge"]) : defaults.groupHeaderSettings.showMetricBadge,
+                badgeBgColor: (gh?.["badgeBgColor"] as { solid?: { color?: string } })?.solid?.color ?? defaults.groupHeaderSettings.badgeBgColor,
+                badgeTextColor: (gh?.["badgeTextColor"] as { solid?: { color?: string } })?.solid?.color ?? defaults.groupHeaderSettings.badgeTextColor
             },
             barSettings: {
                 barOpacity: bar?.["barOpacity"] !== undefined ? Number(bar["barOpacity"]) : defaults.barSettings.barOpacity,
@@ -265,22 +265,22 @@ export class Visual implements IVisual {
                 showBorder: bar?.["showBorder"] !== undefined ? Boolean(bar["showBorder"]) : defaults.barSettings.showBorder,
                 borderColor: (bar?.["borderColor"] as { solid?: { color?: string } })?.solid?.color ?? defaults.barSettings.borderColor,
                 borderWidth: bar?.["borderWidth"] !== undefined ? Number(bar["borderWidth"]) : defaults.barSettings.borderWidth,
-                showCaseNotches: bar?.["showCaseNotches"] !== undefined ? Boolean(bar["showCaseNotches"]) : defaults.barSettings.showCaseNotches,
+                showMetricNotches: bar?.["showMetricNotches"] !== undefined ? Boolean(bar["showMetricNotches"]) : defaults.barSettings.showMetricNotches,
                 overlapMode: String(bar?.["overlapMode"] ?? defaults.barSettings.overlapMode)
             },
-            caseLabelSettings: {
-                show: cl?.["show"] !== undefined ? Boolean(cl["show"]) : defaults.caseLabelSettings.show,
-                labelPosition: String(cl?.["labelPosition"] ?? defaults.caseLabelSettings.labelPosition),
-                labelContent: String(cl?.["labelContent"] ?? defaults.caseLabelSettings.labelContent),
-                fontSize: cl?.["fontSize"] !== undefined ? Number(cl["fontSize"]) : defaults.caseLabelSettings.fontSize,
-                fontColor: (cl?.["fontColor"] as { solid?: { color?: string } })?.solid?.color ?? defaults.caseLabelSettings.fontColor,
-                badgeBgColor: (cl?.["badgeBgColor"] as { solid?: { color?: string } })?.solid?.color ?? defaults.caseLabelSettings.badgeBgColor,
-                prefix: String(cl?.["prefix"] ?? defaults.caseLabelSettings.prefix),
-                suffix: String(cl?.["suffix"] ?? defaults.caseLabelSettings.suffix)
+            labelSettings: {
+                show: lbl?.["show"] !== undefined ? Boolean(lbl["show"]) : defaults.labelSettings.show,
+                labelPosition: String(lbl?.["labelPosition"] ?? defaults.labelSettings.labelPosition),
+                labelContent: String(lbl?.["labelContent"] ?? defaults.labelSettings.labelContent),
+                fontSize: lbl?.["fontSize"] !== undefined ? Number(lbl["fontSize"]) : defaults.labelSettings.fontSize,
+                fontColor: (lbl?.["fontColor"] as { solid?: { color?: string } })?.solid?.color ?? defaults.labelSettings.fontColor,
+                badgeBgColor: (lbl?.["badgeBgColor"] as { solid?: { color?: string } })?.solid?.color ?? defaults.labelSettings.badgeBgColor,
+                prefix: String(lbl?.["prefix"] ?? defaults.labelSettings.prefix),
+                suffix: String(lbl?.["suffix"] ?? defaults.labelSettings.suffix)
             },
             timeAxisSettings: {
                 timeFormat: String(ax?.["timeFormat"] ?? defaults.timeAxisSettings.timeFormat),
-                clampToSurgicalDay: ax?.["clampToSurgicalDay"] !== undefined ? Boolean(ax["clampToSurgicalDay"]) : defaults.timeAxisSettings.clampToSurgicalDay,
+                clampToDailyWindow: ax?.["clampToDailyWindow"] !== undefined ? Boolean(ax["clampToDailyWindow"]) : defaults.timeAxisSettings.clampToDailyWindow,
                 dayStartHour: ax?.["dayStartHour"] !== undefined ? Number(ax["dayStartHour"]) : defaults.timeAxisSettings.dayStartHour,
                 dayEndHour: ax?.["dayEndHour"] !== undefined ? Number(ax["dayEndHour"]) : defaults.timeAxisSettings.dayEndHour,
                 fontSize: ax?.["fontSize"] !== undefined ? Number(ax["fontSize"]) : defaults.timeAxisSettings.fontSize,
@@ -291,17 +291,17 @@ export class Visual implements IVisual {
             referenceLineSettings: {
                 showNowLine: ref?.["showNowLine"] !== undefined ? Boolean(ref["showNowLine"]) : defaults.referenceLineSettings.showNowLine,
                 nowLineColor: (ref?.["nowLineColor"] as { solid?: { color?: string } })?.solid?.color ?? defaults.referenceLineSettings.nowLineColor,
-                showShiftChangeLines: ref?.["showShiftChangeLines"] !== undefined ? Boolean(ref["showShiftChangeLines"]) : defaults.referenceLineSettings.showShiftChangeLines,
-                shiftChangeColor: (ref?.["shiftChangeColor"] as { solid?: { color?: string } })?.solid?.color ?? defaults.referenceLineSettings.shiftChangeColor
+                showMilestoneLines: ref?.["showMilestoneLines"] !== undefined ? Boolean(ref["showMilestoneLines"]) : defaults.referenceLineSettings.showMilestoneLines,
+                milestoneLineColor: (ref?.["milestoneLineColor"] as { solid?: { color?: string } })?.solid?.color ?? defaults.referenceLineSettings.milestoneLineColor
             },
-            overtimeSettings: {
-                highlightLongShifts: ot?.["highlightLongShifts"] !== undefined ? Boolean(ot["highlightLongShifts"]) : defaults.overtimeSettings.highlightLongShifts,
-                thresholdHours: ot?.["thresholdHours"] !== undefined ? Number(ot["thresholdHours"]) : defaults.overtimeSettings.thresholdHours,
-                warningBorderColor: (ot?.["warningBorderColor"] as { solid?: { color?: string } })?.solid?.color ?? defaults.overtimeSettings.warningBorderColor
+            thresholdAlertSettings: {
+                highlightLongIntervals: alrt?.["highlightLongIntervals"] !== undefined ? Boolean(alrt["highlightLongIntervals"]) : defaults.thresholdAlertSettings.highlightLongIntervals,
+                thresholdHours: alrt?.["thresholdHours"] !== undefined ? Number(alrt["thresholdHours"]) : defaults.thresholdAlertSettings.thresholdHours,
+                warningBorderColor: (alrt?.["warningBorderColor"] as { solid?: { color?: string } })?.solid?.color ?? defaults.thresholdAlertSettings.warningBorderColor
             },
             sortSettings: {
-                locationSort: String(srt?.["locationSort"] ?? defaults.sortSettings.locationSort),
-                providerSort: String(srt?.["providerSort"] ?? defaults.sortSettings.providerSort)
+                groupSort: String(srt?.["groupSort"] ?? defaults.sortSettings.groupSort),
+                resourceSort: String(srt?.["resourceSort"] ?? defaults.sortSettings.resourceSort)
             }
         };
     }
@@ -339,17 +339,17 @@ export class Visual implements IVisual {
         const values = dataView.categorical.values || [];
         if (categories.length < 5) return;
 
-        const locCol = categories.find(c => c.source.roles && c.source.roles["location"]) || categories[0];
-        const provCol = categories.find(c => c.source.roles && c.source.roles["provider"]) || categories[1];
+        const grpCol = categories.find(c => c.source.roles && c.source.roles["group"]) || categories[0];
+        const resCol = categories.find(c => c.source.roles && c.source.roles["item"]) || categories[1];
         const catCol = categories.find(c => c.source.roles && c.source.roles["category"]) || categories[2];
         const startCol = categories.find(c => c.source.roles && c.source.roles["startDate"]) || categories[3];
         const endCol = categories.find(c => c.source.roles && c.source.roles["endDate"]) || categories[4];
 
-        const caseCol = values.find(v => v.source.roles && v.source.roles["caseCount"]) || values[0];
-        const extraCol = values.find(v => v.source.roles && v.source.roles["extraMetric"]) || values[1];
+        const primaryCol = values.find(v => v.source.roles && v.source.roles["primaryMetric"]) || values[0];
+        const secondaryCol = values.find(v => v.source.roles && v.source.roles["secondaryMetric"]) || values[1];
 
-        const rowCount = locCol.values.length;
-        const rawShifts: ShiftItem[] = [];
+        const rowCount = grpCol.values.length;
+        const rawItems: ScheduleItem[] = [];
         let minDate: Date = new Date(8640000000000000);
         let maxDate: Date = new Date(-8640000000000000);
 
@@ -369,28 +369,28 @@ export class Visual implements IVisual {
             if (endDate > maxDate) maxDate = endDate;
 
             const selectionId = this.host.createSelectionIdBuilder()
-                .withCategory(provCol, i)
+                .withCategory(resCol, i)
                 .withCategory(catCol, i)
                 .createSelectionId();
 
-            rawShifts.push({
+            rawItems.push({
                 id: `${i}`,
-                location: String(locCol.values[i] ?? "Main OR"),
-                provider: String(provCol.values[i] ?? "Staff"),
-                category: String(catCol.values[i] ?? "Clinical"),
+                groupName: String(grpCol.values[i] ?? "Primary Group"),
+                resourceName: String(resCol.values[i] ?? "Unassigned"),
+                category: String(catCol.values[i] ?? "Standard"),
                 startDate,
                 endDate,
-                caseCount: Number(caseCol?.values[i]) || 0,
-                extraMetric: Number(extraCol?.values[i]) || 0,
+                primaryMetric: Number(primaryCol?.values[i]) || 0,
+                secondaryMetric: Number(secondaryCol?.values[i]) || 0,
                 subRowIndex: 0,
                 selectionId
             });
         }
 
-        if (rawShifts.length === 0) return;
+        if (rawItems.length === 0) return;
 
-        // Optional Day Clamping (e.g., 07:00 - 19:00 surgical day window)
-        if (this.settings.timeAxisSettings.clampToSurgicalDay) {
+        // Daily Time Window Clamping (e.g. 07:00 to 19:00)
+        if (this.settings.timeAxisSettings.clampToDailyWindow) {
             const startH = Math.max(0, Math.min(23, this.settings.timeAxisSettings.dayStartHour));
             const endH = Math.max(1, Math.min(24, this.settings.timeAxisSettings.dayEndHour));
             const clampedMin = new Date(minDate);
@@ -407,92 +407,92 @@ export class Visual implements IVisual {
             maxDate = new Date(minDate.getTime() + 86400000);
         }
 
-        const uniqueCategories = Array.from(new Set(rawShifts.map(s => s.category)));
+        const uniqueCategories = Array.from(new Set(rawItems.map(s => s.category)));
         const colorScale = this.getColorScale(uniqueCategories);
 
-        // Group Hierarchy: Location -> Provider with Concurrency Layout
-        const locMap = new Map<string, Map<string, ShiftItem[]>>();
-        rawShifts.forEach(s => {
-            if (!locMap.has(s.location)) locMap.set(s.location, new Map<string, ShiftItem[]>());
-            const pMap = locMap.get(s.location)!;
-            if (!pMap.has(s.provider)) pMap.set(s.provider, []);
-            pMap.get(s.provider)!.push(s);
+        // Group Hierarchy: Group -> Resource with Concurrency Overlap Management
+        const groupMap = new Map<string, Map<string, ScheduleItem[]>>();
+        rawItems.forEach(s => {
+            if (!groupMap.has(s.groupName)) groupMap.set(s.groupName, new Map<string, ScheduleItem[]>());
+            const rMap = groupMap.get(s.groupName)!;
+            if (!rMap.has(s.resourceName)) rMap.set(s.resourceName, []);
+            rMap.get(s.resourceName)!.push(s);
         });
 
-        const locations: LocationGroup[] = [];
-        locMap.forEach((pMap, locName) => {
-            const providers: ProviderRow[] = [];
-            let locCases = 0;
+        const groups: GroupSwimlane[] = [];
+        groupMap.forEach((rMap, grpName) => {
+            const resourceRows: ResourceRow[] = [];
+            let grpMetric = 0;
 
-            pMap.forEach((shiftList, pName) => {
-                shiftList.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+            rMap.forEach((itemList, rName) => {
+                itemList.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
 
-                // Stagger algorithm for overlapping concurrent shifts
+                // Stagger algorithm for concurrent overlapping intervals
                 let maxSubRows = 1;
                 if (this.settings.barSettings.overlapMode === "stagger") {
                     const lanes: Date[] = [];
-                    shiftList.forEach(s => {
+                    itemList.forEach(item => {
                         let assignedLane = -1;
                         for (let l = 0; l < lanes.length; l++) {
-                            if (s.startDate >= lanes[l]) {
+                            if (item.startDate >= lanes[l]) {
                                 assignedLane = l;
-                                lanes[l] = s.endDate;
+                                lanes[l] = item.endDate;
                                 break;
                             }
                         }
                         if (assignedLane === -1) {
                             assignedLane = lanes.length;
-                            lanes.push(s.endDate);
+                            lanes.push(item.endDate);
                         }
-                        s.subRowIndex = assignedLane;
+                        item.subRowIndex = assignedLane;
                     });
                     maxSubRows = Math.max(1, lanes.length);
                 }
 
-                let pCases = 0;
-                let earliest = shiftList[0].startDate;
-                shiftList.forEach(s => {
-                    pCases += s.caseCount;
-                    if (s.startDate < earliest) earliest = s.startDate;
+                let rMetric = 0;
+                let earliest = itemList[0].startDate;
+                itemList.forEach(item => {
+                    rMetric += item.primaryMetric;
+                    if (item.startDate < earliest) earliest = item.startDate;
                 });
-                locCases += pCases;
+                grpMetric += rMetric;
 
-                providers.push({
-                    providerName: pName,
-                    shifts: shiftList,
+                resourceRows.push({
+                    resourceName: rName,
+                    items: itemList,
                     maxSubRows,
-                    totalCases: pCases,
-                    earliestShift: earliest
+                    totalMetric: rMetric,
+                    earliestStart: earliest
                 });
             });
 
-            // Provider sorting inside location
-            const pSort = this.settings.sortSettings.providerSort;
-            if (pSort === "asc") providers.sort((a, b) => a.providerName.localeCompare(b.providerName));
-            else if (pSort === "desc") providers.sort((a, b) => b.providerName.localeCompare(a.providerName));
-            else if (pSort === "caseDesc") providers.sort((a, b) => b.totalCases - a.totalCases);
-            else if (pSort === "caseAsc") providers.sort((a, b) => a.totalCases - b.totalCases);
-            else if (pSort === "startAsc") providers.sort((a, b) => a.earliestShift.getTime() - b.earliestShift.getTime());
+            // Resource Sorting inside Group
+            const rSort = this.settings.sortSettings.resourceSort;
+            if (rSort === "asc") resourceRows.sort((a, b) => a.resourceName.localeCompare(b.resourceName));
+            else if (rSort === "desc") resourceRows.sort((a, b) => b.resourceName.localeCompare(a.resourceName));
+            else if (rSort === "metricDesc") resourceRows.sort((a, b) => b.totalMetric - a.totalMetric);
+            else if (rSort === "metricAsc") resourceRows.sort((a, b) => a.totalMetric - b.totalMetric);
+            else if (rSort === "startAsc") resourceRows.sort((a, b) => a.earliestStart.getTime() - b.earliestStart.getTime());
 
-            locations.push({ locationName: locName, providers, totalCases: locCases });
+            groups.push({ groupName: grpName, resources: resourceRows, totalMetric: grpMetric });
         });
 
-        // Location Sorting
-        const lSort = this.settings.sortSettings.locationSort;
-        if (lSort === "asc") locations.sort((a, b) => a.locationName.localeCompare(b.locationName));
-        else if (lSort === "desc") locations.sort((a, b) => b.locationName.localeCompare(a.locationName));
-        else if (lSort === "caseDesc") locations.sort((a, b) => b.totalCases - a.totalCases);
-        else if (lSort === "caseAsc") locations.sort((a, b) => a.totalCases - b.totalCases);
+        // Group Swimlane Sorting
+        const gSort = this.settings.sortSettings.groupSort;
+        if (gSort === "asc") groups.sort((a, b) => a.groupName.localeCompare(b.groupName));
+        else if (gSort === "desc") groups.sort((a, b) => b.groupName.localeCompare(a.groupName));
+        else if (gSort === "metricDesc") groups.sort((a, b) => b.totalMetric - a.totalMetric);
+        else if (gSort === "metricAsc") groups.sort((a, b) => a.totalMetric - b.totalMetric);
 
-        // Render Legend
+        // Legend Rendering
         let legendMarginTop = 10;
         if (this.settings.legendSettings.show && uniqueCategories.length > 0) {
             legendMarginTop = this.renderLegend(uniqueCategories, colorScale, viewportWidth);
         }
 
-        const provColWidth = this.settings.swimlaneSettings.providerColumnWidth;
+        const resColWidth = this.settings.swimlaneSettings.resourceColumnWidth;
         const rightMargin = 25;
-        const timelineX = provColWidth + 12;
+        const timelineX = resColWidth + 12;
         const timelineWidth = Math.max(100, viewportWidth - timelineX - rightMargin);
 
         const timeScale = d3.scaleTime()
@@ -500,14 +500,14 @@ export class Visual implements IVisual {
             .range([0, timelineWidth]);
 
         const baseRowHeight = this.settings.swimlaneSettings.rowHeight;
-        const headerHeight = this.settings.locationHeaderSettings.headerHeight;
+        const headerHeight = this.settings.groupHeaderSettings.headerHeight;
         const timeAxisHeight = 42;
 
         let totalHeight = timeAxisHeight;
-        locations.forEach(loc => {
-            if (this.settings.locationHeaderSettings.showHeader) totalHeight += headerHeight;
-            loc.providers.forEach(p => {
-                totalHeight += baseRowHeight * p.maxSubRows;
+        groups.forEach(g => {
+            if (this.settings.groupHeaderSettings.showHeader) totalHeight += headerHeight;
+            g.resources.forEach(r => {
+                totalHeight += baseRowHeight * r.maxSubRows;
             });
             totalHeight += 10;
         });
@@ -540,69 +540,69 @@ export class Visual implements IVisual {
             .attr("font-size", `${this.settings.timeAxisSettings.fontSize}px`)
             .attr("fill", this.settings.timeAxisSettings.fontColor);
 
-        // Render Locations, Provider Rows & Shifts
+        // Render Groups, Swimlanes & Interval Bars
         let currentY = timeAxisHeight;
-        const prefix = cleanAffix(this.settings.caseLabelSettings.prefix);
-        const suffix = cleanAffix(this.settings.caseLabelSettings.suffix);
+        const prefix = cleanAffix(this.settings.labelSettings.prefix);
+        const suffix = cleanAffix(this.settings.labelSettings.suffix);
 
-        locations.forEach(loc => {
-            // Location Header Banner
-            if (this.settings.locationHeaderSettings.showHeader) {
-                const locHeader = this.chartContainer.append("g")
-                    .attr("class", "location-header")
+        groups.forEach(grp => {
+            // Group Header Banner
+            if (this.settings.groupHeaderSettings.showHeader) {
+                const groupHeader = this.chartContainer.append("g")
+                    .attr("class", "group-header")
                     .attr("transform", `translate(0, ${currentY})`);
 
-                locHeader.append("rect")
+                groupHeader.append("rect")
                     .attr("x", 0)
                     .attr("y", 0)
                     .attr("width", viewportWidth - rightMargin + 8)
                     .attr("height", headerHeight)
-                    .attr("fill", this.settings.locationHeaderSettings.headerBgColor)
+                    .attr("fill", this.settings.groupHeaderSettings.headerBgColor)
                     .attr("rx", 3);
 
-                locHeader.append("text")
+                groupHeader.append("text")
                     .attr("x", 12)
                     .attr("y", headerHeight / 2 + 4)
-                    .attr("font-size", `${this.settings.locationHeaderSettings.headerFontSize}px`)
+                    .attr("font-size", `${this.settings.groupHeaderSettings.headerFontSize}px`)
                     .attr("font-weight", "bold")
-                    .attr("fill", this.settings.locationHeaderSettings.headerFontColor)
-                    .text(loc.locationName);
+                    .attr("fill", this.settings.groupHeaderSettings.headerFontColor)
+                    .text(grp.groupName);
 
-                if (this.settings.locationHeaderSettings.showCaseBadge) {
-                    const badgeText = `${loc.totalCases} Total Cases`;
-                    const badgeWidth = Math.max(80, badgeText.length * 7 + 16);
+                if (this.settings.groupHeaderSettings.showMetricBadge) {
+                    const badgeText = `${grp.totalMetric} Total`;
+                    const badgeWidth = Math.max(70, badgeText.length * 7 + 16);
                     const badgeX = timelineX;
 
-                    locHeader.append("rect")
+                    groupHeader.append("rect")
                         .attr("x", badgeX)
                         .attr("y", 4)
                         .attr("width", badgeWidth)
                         .attr("height", headerHeight - 8)
                         .attr("rx", (headerHeight - 8) / 2)
-                        .attr("fill", this.settings.locationHeaderSettings.badgeBgColor);
+                        .attr("fill", this.settings.groupHeaderSettings.badgeBgColor);
 
-                    locHeader.append("text")
+                    groupHeader.append("text")
                         .attr("x", badgeX + badgeWidth / 2)
                         .attr("y", headerHeight / 2 + 3.5)
                         .attr("text-anchor", "middle")
                         .attr("font-size", "9px")
                         .attr("font-weight", "bold")
-                        .attr("fill", this.settings.locationHeaderSettings.badgeTextColor)
+                        .attr("fill", this.settings.groupHeaderSettings.badgeTextColor)
                         .text(badgeText);
                 }
 
                 currentY += headerHeight;
             }
 
-            // Provider Swimlanes
-            loc.providers.forEach((prov, pIdx) => {
-                const computedRowHeight = baseRowHeight * prov.maxSubRows;
+            // Resource Swimlanes
+            grp.resources.forEach((res, rIdx) => {
+                const computedRowHeight = baseRowHeight * res.maxSubRows;
                 const rowGroup = this.chartContainer.append("g")
-                    .attr("class", "provider-row")
+                    .attr("class", "resource-row")
                     .attr("transform", `translate(0, ${currentY})`);
 
                 // Alternating row background
-                const rowBgColor = pIdx % 2 === 0 ? this.settings.swimlaneSettings.evenRowColor : this.settings.swimlaneSettings.oddRowColor;
+                const rowBgColor = rIdx % 2 === 0 ? this.settings.swimlaneSettings.evenRowColor : this.settings.swimlaneSettings.oddRowColor;
                 if (this.settings.swimlaneSettings.showZebraStriping) {
                     rowGroup.append("rect")
                         .attr("x", 0)
@@ -623,14 +623,14 @@ export class Visual implements IVisual {
                         .attr("stroke-width", 1);
                 }
 
-                // Provider Name Label
+                // Resource Name Label
                 rowGroup.append("text")
                     .attr("x", 12)
                     .attr("y", computedRowHeight / 2 + 4)
-                    .attr("font-size", `${this.settings.swimlaneSettings.providerFontSize}px`)
+                    .attr("font-size", `${this.settings.swimlaneSettings.resourceFontSize}px`)
                     .attr("font-weight", "600")
-                    .attr("fill", this.settings.swimlaneSettings.providerFontColor)
-                    .text(prov.providerName);
+                    .attr("fill", this.settings.swimlaneSettings.resourceFontColor)
+                    .text(res.resourceName);
 
                 // Vertical Gridlines across row
                 if (this.settings.timeAxisSettings.showGridlines) {
@@ -647,35 +647,35 @@ export class Visual implements IVisual {
                     });
                 }
 
-                // Render Shift Bars
-                const subSlotHeight = computedRowHeight / prov.maxSubRows;
+                // Render Interval Bars
+                const subSlotHeight = computedRowHeight / res.maxSubRows;
                 const barH = subSlotHeight * (this.settings.swimlaneSettings.barHeightPercent / 100);
                 const barPadY = (subSlotHeight - barH) / 2;
 
-                prov.shifts.forEach(shift => {
-                    const x0 = timelineX + timeScale(shift.startDate);
-                    const x1 = timelineX + timeScale(shift.endDate);
+                res.items.forEach(item => {
+                    const x0 = timelineX + timeScale(item.startDate);
+                    const x1 = timelineX + timeScale(item.endDate);
                     const barW = Math.max(5, x1 - x0);
-                    const barY = shift.subRowIndex * subSlotHeight + barPadY;
+                    const barY = item.subRowIndex * subSlotHeight + barPadY;
 
-                    const durationHrs = (shift.endDate.getTime() - shift.startDate.getTime()) / 3600000;
-                    const isOvertime = this.settings.overtimeSettings.highlightLongShifts && (durationHrs >= this.settings.overtimeSettings.thresholdHours);
-                    const pacing = shift.caseCount > 0 ? (shift.caseCount / durationHrs).toFixed(1) : "0";
+                    const durationHrs = (item.endDate.getTime() - item.startDate.getTime()) / 3600000;
+                    const isAlert = this.settings.thresholdAlertSettings.highlightLongIntervals && (durationHrs >= this.settings.thresholdAlertSettings.thresholdHours);
+                    const pacing = item.primaryMetric > 0 ? (item.primaryMetric / durationHrs).toFixed(1) : "0";
 
                     const tooltipItems: VisualTooltipDataItem[] = [
-                        { displayName: "Location", value: shift.location },
-                        { displayName: "Provider", value: shift.provider },
-                        { displayName: "Assignment", value: shift.category },
-                        { displayName: "Start", value: d3.timeFormat("%m/%d %H:%M")(shift.startDate) },
-                        { displayName: "End", value: d3.timeFormat("%m/%d %H:%M")(shift.endDate) },
-                        { displayName: "Shift Duration", value: `${durationHrs.toFixed(2)} hrs` },
-                        { displayName: "Cases Completed", value: `${shift.caseCount}` },
-                        { displayName: "Case Pacing", value: `${pacing} cases/hr` },
-                        ...(shift.extraMetric > 0 ? [{ displayName: "Units / Metric", value: d3.format(",.2f")(shift.extraMetric) }] : [])
+                        { displayName: "Group", value: item.groupName },
+                        { displayName: "Resource", value: item.resourceName },
+                        { displayName: "Category", value: item.category },
+                        { displayName: "Start", value: d3.timeFormat("%m/%d %H:%M")(item.startDate) },
+                        { displayName: "End", value: d3.timeFormat("%m/%d %H:%M")(item.endDate) },
+                        { displayName: "Duration", value: `${durationHrs.toFixed(2)} hrs` },
+                        { displayName: "Primary Metric", value: `${item.primaryMetric}` },
+                        { displayName: "Rate / Pacing", value: `${pacing}/hr` },
+                        ...(item.secondaryMetric > 0 ? [{ displayName: "Secondary Metric", value: d3.format(",.2f")(item.secondaryMetric) }] : [])
                     ];
 
-                    const strokeColor = isOvertime ? this.settings.overtimeSettings.warningBorderColor : this.settings.barSettings.borderColor;
-                    const strokeWidth = isOvertime ? 2.5 : (this.settings.barSettings.showBorder ? this.settings.barSettings.borderWidth : 0);
+                    const strokeColor = isAlert ? this.settings.thresholdAlertSettings.warningBorderColor : this.settings.barSettings.borderColor;
+                    const strokeWidth = isAlert ? 2.5 : (this.settings.barSettings.showBorder ? this.settings.barSettings.borderWidth : 0);
 
                     const barRect = rowGroup.append("rect")
                         .attr("class", "gantt-bar")
@@ -684,7 +684,7 @@ export class Visual implements IVisual {
                         .attr("width", barW)
                         .attr("height", barH)
                         .attr("rx", this.settings.barSettings.barCornerRadius)
-                        .attr("fill", colorScale(shift.category))
+                        .attr("fill", colorScale(item.category))
                         .attr("fill-opacity", this.settings.barSettings.barOpacity / 100)
                         .attr("stroke", strokeColor)
                         .attr("stroke-width", strokeWidth)
@@ -714,12 +714,12 @@ export class Visual implements IVisual {
                         })
                         .on("click", (event: MouseEvent) => {
                             event.stopPropagation();
-                            this.selectionManager.select(shift.selectionId, event.ctrlKey || event.metaKey);
+                            this.selectionManager.select(item.selectionId, event.ctrlKey || event.metaKey);
                         });
 
-                    // Micro Case Notches along bottom edge of the bar
-                    if (this.settings.barSettings.showCaseNotches && shift.caseCount > 0 && barW > 25) {
-                        const notchCount = Math.min(shift.caseCount, 15);
+                    // Micro Metric Notches along bottom edge of the bar
+                    if (this.settings.barSettings.showMetricNotches && item.primaryMetric > 0 && barW > 25) {
+                        const notchCount = Math.min(item.primaryMetric, 15);
                         const step = barW / (notchCount + 1);
                         for (let k = 1; k <= notchCount; k++) {
                             rowGroup.append("line")
@@ -733,17 +733,17 @@ export class Visual implements IVisual {
                         }
                     }
 
-                    // Case Data Labels & Floating Badges
-                    if (this.settings.caseLabelSettings.show && shift.caseCount > 0) {
-                        let content = `${prefix}${shift.caseCount}${suffix}`;
-                        if (this.settings.caseLabelSettings.labelContent === "casesAndHours") {
-                            content = `${shift.caseCount} cs (${durationHrs.toFixed(1)}h)`;
-                        } else if (this.settings.caseLabelSettings.labelContent === "hoursOnly") {
+                    // Data Labels & Floating Badges
+                    if (this.settings.labelSettings.show && item.primaryMetric > 0) {
+                        let content = `${prefix}${item.primaryMetric}${suffix}`;
+                        if (this.settings.labelSettings.labelContent === "metricAndDuration") {
+                            content = `${item.primaryMetric} (${durationHrs.toFixed(1)}h)`;
+                        } else if (this.settings.labelSettings.labelContent === "durationOnly") {
                             content = `${durationHrs.toFixed(1)}h`;
                         }
 
-                        const pos = this.settings.caseLabelSettings.labelPosition;
-                        const fontSize = this.settings.caseLabelSettings.fontSize;
+                        const pos = this.settings.labelSettings.labelPosition;
+                        const fontSize = this.settings.labelSettings.fontSize;
 
                         if (pos === "pillBadge") {
                             const badgeW = Math.max(30, content.length * 6 + 12);
@@ -758,7 +758,7 @@ export class Visual implements IVisual {
                                     .attr("width", badgeW)
                                     .attr("height", badgeH)
                                     .attr("rx", badgeH / 2)
-                                    .attr("fill", this.settings.caseLabelSettings.badgeBgColor)
+                                    .attr("fill", this.settings.labelSettings.badgeBgColor)
                                     .attr("pointer-events", "none");
 
                                 rowGroup.append("text")
@@ -767,7 +767,7 @@ export class Visual implements IVisual {
                                     .attr("text-anchor", "middle")
                                     .attr("font-size", `${fontSize}px`)
                                     .attr("font-weight", "bold")
-                                    .attr("fill", this.settings.caseLabelSettings.fontColor)
+                                    .attr("fill", this.settings.labelSettings.fontColor)
                                     .attr("pointer-events", "none")
                                     .text(content);
                             }
@@ -799,7 +799,7 @@ export class Visual implements IVisual {
                                     .attr("text-anchor", "middle")
                                     .attr("font-size", `${fontSize}px`)
                                     .attr("font-weight", "bold")
-                                    .attr("fill", this.settings.caseLabelSettings.fontColor)
+                                    .attr("fill", this.settings.labelSettings.fontColor)
                                     .attr("pointer-events", "none")
                                     .text(content);
                             }
@@ -813,15 +813,15 @@ export class Visual implements IVisual {
             currentY += 8;
         });
 
-        // Shift Turnover & Now Reference Lines
+        // Milestone and Live Time Reference Lines
         const plotBottomY = currentY;
-        if (this.settings.referenceLineSettings.showShiftChangeLines) {
-            const shiftHours = [7, 15, 19];
+        if (this.settings.referenceLineSettings.showMilestoneLines) {
+            const milestoneHours = [7, 15, 19];
             const startDay = new Date(minDate);
             startDay.setHours(0, 0, 0, 0);
 
             for (let dayOffset = 0; dayOffset <= Math.ceil((maxDate.getTime() - minDate.getTime()) / 86400000); dayOffset++) {
-                shiftHours.forEach(hr => {
+                milestoneHours.forEach(hr => {
                     const lineTime = new Date(startDay.getTime() + dayOffset * 86400000 + hr * 3600000);
                     if (lineTime >= minDate && lineTime <= maxDate) {
                         const rx = timelineX + timeScale(lineTime);
@@ -830,7 +830,7 @@ export class Visual implements IVisual {
                             .attr("x2", rx)
                             .attr("y1", timeAxisHeight)
                             .attr("y2", plotBottomY)
-                            .attr("stroke", this.settings.referenceLineSettings.shiftChangeColor)
+                            .attr("stroke", this.settings.referenceLineSettings.milestoneLineColor)
                             .attr("stroke-width", 1.5)
                             .attr("stroke-dasharray", "3,3")
                             .attr("pointer-events", "none");
@@ -975,7 +975,7 @@ export class Visual implements IVisual {
                 ]
             },
             {
-                displayName: "Swimlanes & Rows",
+                displayName: "Swimlanes & Layout",
                 uid: "swimlaneCard_uid",
                 groups: [
                     {
@@ -1005,35 +1005,35 @@ export class Visual implements IVisual {
                                 }
                             },
                             {
-                                uid: "providerColWidth_slice",
-                                displayName: "Provider Column Width (px)",
+                                uid: "resourceColWidth_slice",
+                                displayName: "Resource Column Width (px)",
                                 control: {
                                     type: powerbi.visuals.FormattingComponent.NumUpDown,
                                     properties: {
-                                        descriptor: { objectName: "swimlaneSettings", propertyName: "providerColumnWidth" },
-                                        value: this.settings.swimlaneSettings.providerColumnWidth
+                                        descriptor: { objectName: "swimlaneSettings", propertyName: "resourceColumnWidth" },
+                                        value: this.settings.swimlaneSettings.resourceColumnWidth
                                     }
                                 }
                             },
                             {
-                                uid: "providerFontSize_slice",
-                                displayName: "Provider Font Size",
+                                uid: "resourceFontSize_slice",
+                                displayName: "Resource Font Size",
                                 control: {
                                     type: powerbi.visuals.FormattingComponent.NumUpDown,
                                     properties: {
-                                        descriptor: { objectName: "swimlaneSettings", propertyName: "providerFontSize" },
-                                        value: this.settings.swimlaneSettings.providerFontSize
+                                        descriptor: { objectName: "swimlaneSettings", propertyName: "resourceFontSize" },
+                                        value: this.settings.swimlaneSettings.resourceFontSize
                                     }
                                 }
                             },
                             {
-                                uid: "providerFontColor_slice",
-                                displayName: "Provider Font Color",
+                                uid: "resourceFontColor_slice",
+                                displayName: "Resource Font Color",
                                 control: {
                                     type: powerbi.visuals.FormattingComponent.ColorPicker,
                                     properties: {
-                                        descriptor: { objectName: "swimlaneSettings", propertyName: "providerFontColor" },
-                                        value: { value: this.settings.swimlaneSettings.providerFontColor }
+                                        descriptor: { objectName: "swimlaneSettings", propertyName: "resourceFontColor" },
+                                        value: { value: this.settings.swimlaneSettings.resourceFontColor }
                                     }
                                 }
                             }
@@ -1103,21 +1103,21 @@ export class Visual implements IVisual {
                 ]
             },
             {
-                displayName: "Location Headers",
-                uid: "locationHeaderCard_uid",
+                displayName: "Group Headers",
+                uid: "groupHeaderCard_uid",
                 groups: [
                     {
                         displayName: "Banner Appearance",
-                        uid: "locationHeaderGroup_uid",
+                        uid: "groupHeaderGroup_uid",
                         slices: [
                             {
-                                uid: "showLocHeader_slice",
-                                displayName: "Show Location Header",
+                                uid: "showGrpHeader_slice",
+                                displayName: "Show Group Header",
                                 control: {
                                     type: powerbi.visuals.FormattingComponent.ToggleSwitch,
                                     properties: {
-                                        descriptor: { objectName: "locationHeaderSettings", propertyName: "showHeader" },
-                                        value: this.settings.locationHeaderSettings.showHeader
+                                        descriptor: { objectName: "groupHeaderSettings", propertyName: "showHeader" },
+                                        value: this.settings.groupHeaderSettings.showHeader
                                     }
                                 }
                             },
@@ -1127,8 +1127,8 @@ export class Visual implements IVisual {
                                 control: {
                                     type: powerbi.visuals.FormattingComponent.NumUpDown,
                                     properties: {
-                                        descriptor: { objectName: "locationHeaderSettings", propertyName: "headerHeight" },
-                                        value: this.settings.locationHeaderSettings.headerHeight
+                                        descriptor: { objectName: "groupHeaderSettings", propertyName: "headerHeight" },
+                                        value: this.settings.groupHeaderSettings.headerHeight
                                     }
                                 }
                             },
@@ -1138,8 +1138,8 @@ export class Visual implements IVisual {
                                 control: {
                                     type: powerbi.visuals.FormattingComponent.NumUpDown,
                                     properties: {
-                                        descriptor: { objectName: "locationHeaderSettings", propertyName: "headerFontSize" },
-                                        value: this.settings.locationHeaderSettings.headerFontSize
+                                        descriptor: { objectName: "groupHeaderSettings", propertyName: "headerFontSize" },
+                                        value: this.settings.groupHeaderSettings.headerFontSize
                                     }
                                 }
                             },
@@ -1149,8 +1149,8 @@ export class Visual implements IVisual {
                                 control: {
                                     type: powerbi.visuals.FormattingComponent.ColorPicker,
                                     properties: {
-                                        descriptor: { objectName: "locationHeaderSettings", propertyName: "headerFontColor" },
-                                        value: { value: this.settings.locationHeaderSettings.headerFontColor }
+                                        descriptor: { objectName: "groupHeaderSettings", propertyName: "headerFontColor" },
+                                        value: { value: this.settings.groupHeaderSettings.headerFontColor }
                                     }
                                 }
                             },
@@ -1160,19 +1160,19 @@ export class Visual implements IVisual {
                                 control: {
                                     type: powerbi.visuals.FormattingComponent.ColorPicker,
                                     properties: {
-                                        descriptor: { objectName: "locationHeaderSettings", propertyName: "headerBgColor" },
-                                        value: { value: this.settings.locationHeaderSettings.headerBgColor }
+                                        descriptor: { objectName: "groupHeaderSettings", propertyName: "headerBgColor" },
+                                        value: { value: this.settings.groupHeaderSettings.headerBgColor }
                                     }
                                 }
                             },
                             {
-                                uid: "showCaseBadge_slice",
-                                displayName: "Show Case Total Badge",
+                                uid: "showMetricBadge_slice",
+                                displayName: "Show Metric Total Badge",
                                 control: {
                                     type: powerbi.visuals.FormattingComponent.ToggleSwitch,
                                     properties: {
-                                        descriptor: { objectName: "locationHeaderSettings", propertyName: "showCaseBadge" },
-                                        value: this.settings.locationHeaderSettings.showCaseBadge
+                                        descriptor: { objectName: "groupHeaderSettings", propertyName: "showMetricBadge" },
+                                        value: this.settings.groupHeaderSettings.showMetricBadge
                                     }
                                 }
                             },
@@ -1182,8 +1182,8 @@ export class Visual implements IVisual {
                                 control: {
                                     type: powerbi.visuals.FormattingComponent.ColorPicker,
                                     properties: {
-                                        descriptor: { objectName: "locationHeaderSettings", propertyName: "badgeBgColor" },
-                                        value: { value: this.settings.locationHeaderSettings.badgeBgColor }
+                                        descriptor: { objectName: "groupHeaderSettings", propertyName: "badgeBgColor" },
+                                        value: { value: this.settings.groupHeaderSettings.badgeBgColor }
                                     }
                                 }
                             },
@@ -1193,8 +1193,8 @@ export class Visual implements IVisual {
                                 control: {
                                     type: powerbi.visuals.FormattingComponent.ColorPicker,
                                     properties: {
-                                        descriptor: { objectName: "locationHeaderSettings", propertyName: "badgeTextColor" },
-                                        value: { value: this.settings.locationHeaderSettings.badgeTextColor }
+                                        descriptor: { objectName: "groupHeaderSettings", propertyName: "badgeTextColor" },
+                                        value: { value: this.settings.groupHeaderSettings.badgeTextColor }
                                     }
                                 }
                             }
@@ -1266,19 +1266,19 @@ export class Visual implements IVisual {
                                 }
                             },
                             {
-                                uid: "showCaseNotches_slice",
-                                displayName: "Show Micro Case Ticks",
+                                uid: "showMetricNotches_slice",
+                                displayName: "Show Micro Metric Ticks",
                                 control: {
                                     type: powerbi.visuals.FormattingComponent.ToggleSwitch,
                                     properties: {
-                                        descriptor: { objectName: "barSettings", propertyName: "showCaseNotches" },
-                                        value: this.settings.barSettings.showCaseNotches
+                                        descriptor: { objectName: "barSettings", propertyName: "showMetricNotches" },
+                                        value: this.settings.barSettings.showMetricNotches
                                     }
                                 }
                             },
                             {
                                 uid: "overlapMode_slice",
-                                displayName: "Concurrent Shifts Mode",
+                                displayName: "Concurrent Overlap Mode",
                                 control: {
                                     type: powerbi.visuals.FormattingComponent.Dropdown,
                                     properties: {
@@ -1292,65 +1292,65 @@ export class Visual implements IVisual {
                 ]
             },
             {
-                displayName: "Case Data Labels & Badges",
-                uid: "caseLabelCard_uid",
+                displayName: "Data Labels & Badges",
+                uid: "labelCard_uid",
                 groups: [
                     {
                         displayName: "Labels",
-                        uid: "caseLabelGroup_uid",
+                        uid: "labelGroup_uid",
                         slices: [
                             {
-                                uid: "showCases_slice",
-                                displayName: "Show Case Labels",
+                                uid: "showLabels_slice",
+                                displayName: "Show Data Labels",
                                 control: {
                                     type: powerbi.visuals.FormattingComponent.ToggleSwitch,
                                     properties: {
-                                        descriptor: { objectName: "caseLabelSettings", propertyName: "show" },
-                                        value: this.settings.caseLabelSettings.show
+                                        descriptor: { objectName: "labelSettings", propertyName: "show" },
+                                        value: this.settings.labelSettings.show
                                     }
                                 }
                             },
                             {
-                                uid: "casePosition_slice",
+                                uid: "labelPosition_slice",
                                 displayName: "Position",
                                 control: {
                                     type: powerbi.visuals.FormattingComponent.Dropdown,
                                     properties: {
-                                        descriptor: { objectName: "caseLabelSettings", propertyName: "labelPosition" },
-                                        value: this.settings.caseLabelSettings.labelPosition
+                                        descriptor: { objectName: "labelSettings", propertyName: "labelPosition" },
+                                        value: this.settings.labelSettings.labelPosition
                                     }
                                 }
                             },
                             {
-                                uid: "caseContent_slice",
+                                uid: "labelContent_slice",
                                 displayName: "Label Content",
                                 control: {
                                     type: powerbi.visuals.FormattingComponent.Dropdown,
                                     properties: {
-                                        descriptor: { objectName: "caseLabelSettings", propertyName: "labelContent" },
-                                        value: this.settings.caseLabelSettings.labelContent
+                                        descriptor: { objectName: "labelSettings", propertyName: "labelContent" },
+                                        value: this.settings.labelSettings.labelContent
                                     }
                                 }
                             },
                             {
-                                uid: "caseFontSize_slice",
+                                uid: "labelFontSize_slice",
                                 displayName: "Font Size",
                                 control: {
                                     type: powerbi.visuals.FormattingComponent.NumUpDown,
                                     properties: {
-                                        descriptor: { objectName: "caseLabelSettings", propertyName: "fontSize" },
-                                        value: this.settings.caseLabelSettings.fontSize
+                                        descriptor: { objectName: "labelSettings", propertyName: "fontSize" },
+                                        value: this.settings.labelSettings.fontSize
                                     }
                                 }
                             },
                             {
-                                uid: "caseFontColor_slice",
+                                uid: "labelFontColor_slice",
                                 displayName: "Font Color",
                                 control: {
                                     type: powerbi.visuals.FormattingComponent.ColorPicker,
                                     properties: {
-                                        descriptor: { objectName: "caseLabelSettings", propertyName: "fontColor" },
-                                        value: { value: this.settings.caseLabelSettings.fontColor }
+                                        descriptor: { objectName: "labelSettings", propertyName: "fontColor" },
+                                        value: { value: this.settings.labelSettings.fontColor }
                                     }
                                 }
                             },
@@ -1360,30 +1360,30 @@ export class Visual implements IVisual {
                                 control: {
                                     type: powerbi.visuals.FormattingComponent.ColorPicker,
                                     properties: {
-                                        descriptor: { objectName: "caseLabelSettings", propertyName: "badgeBgColor" },
-                                        value: { value: this.settings.caseLabelSettings.badgeBgColor }
+                                        descriptor: { objectName: "labelSettings", propertyName: "badgeBgColor" },
+                                        value: { value: this.settings.labelSettings.badgeBgColor }
                                     }
                                 }
                             },
                             {
-                                uid: "casePrefix_slice",
+                                uid: "labelPrefix_slice",
                                 displayName: "Prefix",
                                 control: {
                                     type: powerbi.visuals.FormattingComponent.Dropdown,
                                     properties: {
-                                        descriptor: { objectName: "caseLabelSettings", propertyName: "prefix" },
-                                        value: this.settings.caseLabelSettings.prefix
+                                        descriptor: { objectName: "labelSettings", propertyName: "prefix" },
+                                        value: this.settings.labelSettings.prefix
                                     }
                                 }
                             },
                             {
-                                uid: "caseSuffix_slice",
+                                uid: "labelSuffix_slice",
                                 displayName: "Suffix",
                                 control: {
                                     type: powerbi.visuals.FormattingComponent.Dropdown,
                                     properties: {
-                                        descriptor: { objectName: "caseLabelSettings", propertyName: "suffix" },
-                                        value: this.settings.caseLabelSettings.suffix
+                                        descriptor: { objectName: "labelSettings", propertyName: "suffix" },
+                                        value: this.settings.labelSettings.suffix
                                     }
                                 }
                             }
@@ -1392,7 +1392,7 @@ export class Visual implements IVisual {
                 ]
             },
             {
-                displayName: "Timeline & Time Window",
+                displayName: "Timeline & Window Clamping",
                 uid: "timeAxisCard_uid",
                 groups: [
                     {
@@ -1412,12 +1412,12 @@ export class Visual implements IVisual {
                             },
                             {
                                 uid: "clampDay_slice",
-                                displayName: "Clamp to Daily Surgical Hours",
+                                displayName: "Clamp to Daily Window",
                                 control: {
                                     type: powerbi.visuals.FormattingComponent.ToggleSwitch,
                                     properties: {
-                                        descriptor: { objectName: "timeAxisSettings", propertyName: "clampToSurgicalDay" },
-                                        value: this.settings.timeAxisSettings.clampToSurgicalDay
+                                        descriptor: { objectName: "timeAxisSettings", propertyName: "clampToDailyWindow" },
+                                        value: this.settings.timeAxisSettings.clampToDailyWindow
                                     }
                                 }
                             },
@@ -1492,7 +1492,7 @@ export class Visual implements IVisual {
                 ]
             },
             {
-                displayName: "Shift & Time Reference Lines",
+                displayName: "Reference Lines & Markers",
                 uid: "referenceLineCard_uid",
                 groups: [
                     {
@@ -1512,7 +1512,7 @@ export class Visual implements IVisual {
                             },
                             {
                                 uid: "nowColor_slice",
-                                displayName: "Now Indicator Color",
+                                displayName: "Current Time Color",
                                 control: {
                                     type: powerbi.visuals.FormattingComponent.ColorPicker,
                                     properties: {
@@ -1522,24 +1522,24 @@ export class Visual implements IVisual {
                                 }
                             },
                             {
-                                uid: "showShiftChange_slice",
-                                displayName: "Turnover Lines (07:00/15:00/19:00)",
+                                uid: "showMilestones_slice",
+                                displayName: "Show Interval Markers",
                                 control: {
                                     type: powerbi.visuals.FormattingComponent.ToggleSwitch,
                                     properties: {
-                                        descriptor: { objectName: "referenceLineSettings", propertyName: "showShiftChangeLines" },
-                                        value: this.settings.referenceLineSettings.showShiftChangeLines
+                                        descriptor: { objectName: "referenceLineSettings", propertyName: "showMilestoneLines" },
+                                        value: this.settings.referenceLineSettings.showMilestoneLines
                                     }
                                 }
                             },
                             {
-                                uid: "shiftChangeColor_slice",
-                                displayName: "Turnover Line Color",
+                                uid: "milestoneColor_slice",
+                                displayName: "Interval Marker Color",
                                 control: {
                                     type: powerbi.visuals.FormattingComponent.ColorPicker,
                                     properties: {
-                                        descriptor: { objectName: "referenceLineSettings", propertyName: "shiftChangeColor" },
-                                        value: { value: this.settings.referenceLineSettings.shiftChangeColor }
+                                        descriptor: { objectName: "referenceLineSettings", propertyName: "milestoneLineColor" },
+                                        value: { value: this.settings.referenceLineSettings.milestoneLineColor }
                                     }
                                 }
                             }
@@ -1548,32 +1548,32 @@ export class Visual implements IVisual {
                 ]
             },
             {
-                displayName: "Overtime & Shift Alerts",
-                uid: "overtimeCard_uid",
+                displayName: "Duration & Threshold Alerts",
+                uid: "thresholdAlertCard_uid",
                 groups: [
                     {
                         displayName: "Alert Rules",
-                        uid: "overtimeGroup_uid",
+                        uid: "thresholdAlertGroup_uid",
                         slices: [
                             {
                                 uid: "hlLong_slice",
-                                displayName: "Flag Extended Shifts",
+                                displayName: "Flag Extended Durations",
                                 control: {
                                     type: powerbi.visuals.FormattingComponent.ToggleSwitch,
                                     properties: {
-                                        descriptor: { objectName: "overtimeSettings", propertyName: "highlightLongShifts" },
-                                        value: this.settings.overtimeSettings.highlightLongShifts
+                                        descriptor: { objectName: "thresholdAlertSettings", propertyName: "highlightLongIntervals" },
+                                        value: this.settings.thresholdAlertSettings.highlightLongIntervals
                                     }
                                 }
                             },
                             {
                                 uid: "threshold_slice",
-                                displayName: "Shift Threshold (Hours)",
+                                displayName: "Duration Threshold (Hours)",
                                 control: {
                                     type: powerbi.visuals.FormattingComponent.NumUpDown,
                                     properties: {
-                                        descriptor: { objectName: "overtimeSettings", propertyName: "thresholdHours" },
-                                        value: this.settings.overtimeSettings.thresholdHours
+                                        descriptor: { objectName: "thresholdAlertSettings", propertyName: "thresholdHours" },
+                                        value: this.settings.thresholdAlertSettings.thresholdHours
                                     }
                                 }
                             },
@@ -1583,8 +1583,8 @@ export class Visual implements IVisual {
                                 control: {
                                     type: powerbi.visuals.FormattingComponent.ColorPicker,
                                     properties: {
-                                        descriptor: { objectName: "overtimeSettings", propertyName: "warningBorderColor" },
-                                        value: { value: this.settings.overtimeSettings.warningBorderColor }
+                                        descriptor: { objectName: "thresholdAlertSettings", propertyName: "warningBorderColor" },
+                                        value: { value: this.settings.thresholdAlertSettings.warningBorderColor }
                                     }
                                 }
                             }
@@ -1601,24 +1601,24 @@ export class Visual implements IVisual {
                         uid: "sortGroup_uid",
                         slices: [
                             {
-                                uid: "locSort_slice",
-                                displayName: "Location Order",
+                                uid: "grpSort_slice",
+                                displayName: "Group Order",
                                 control: {
                                     type: powerbi.visuals.FormattingComponent.Dropdown,
                                     properties: {
-                                        descriptor: { objectName: "sortSettings", propertyName: "locationSort" },
-                                        value: this.settings.sortSettings.locationSort
+                                        descriptor: { objectName: "sortSettings", propertyName: "groupSort" },
+                                        value: this.settings.sortSettings.groupSort
                                     }
                                 }
                             },
                             {
-                                uid: "provSort_slice",
-                                displayName: "Provider Order",
+                                uid: "resSort_slice",
+                                displayName: "Resource / Item Order",
                                 control: {
                                     type: powerbi.visuals.FormattingComponent.Dropdown,
                                     properties: {
-                                        descriptor: { objectName: "sortSettings", propertyName: "providerSort" },
-                                        value: this.settings.sortSettings.providerSort
+                                        descriptor: { objectName: "sortSettings", propertyName: "resourceSort" },
+                                        value: this.settings.sortSettings.resourceSort
                                     }
                                 }
                             }
@@ -1661,9 +1661,9 @@ export class Visual implements IVisual {
                     properties: {
                         rowHeight: this.settings.swimlaneSettings.rowHeight,
                         barHeightPercent: this.settings.swimlaneSettings.barHeightPercent,
-                        providerColumnWidth: this.settings.swimlaneSettings.providerColumnWidth,
-                        providerFontSize: this.settings.swimlaneSettings.providerFontSize,
-                        providerFontColor: { solid: { color: this.settings.swimlaneSettings.providerFontColor } },
+                        resourceColumnWidth: this.settings.swimlaneSettings.resourceColumnWidth,
+                        resourceFontSize: this.settings.swimlaneSettings.resourceFontSize,
+                        resourceFontColor: { solid: { color: this.settings.swimlaneSettings.resourceFontColor } },
                         showZebraStriping: this.settings.swimlaneSettings.showZebraStriping,
                         evenRowColor: { solid: { color: this.settings.swimlaneSettings.evenRowColor } },
                         oddRowColor: { solid: { color: this.settings.swimlaneSettings.oddRowColor } },
@@ -1672,19 +1672,19 @@ export class Visual implements IVisual {
                     }
                 });
                 break;
-            case "locationHeaderSettings":
+            case "groupHeaderSettings":
                 instances.push({
-                    objectName: "locationHeaderSettings",
+                    objectName: "groupHeaderSettings",
                     selector: (null as any),
                     properties: {
-                        showHeader: this.settings.locationHeaderSettings.showHeader,
-                        headerHeight: this.settings.locationHeaderSettings.headerHeight,
-                        headerFontSize: this.settings.locationHeaderSettings.headerFontSize,
-                        headerFontColor: { solid: { color: this.settings.locationHeaderSettings.headerFontColor } },
-                        headerBgColor: { solid: { color: this.settings.locationHeaderSettings.headerBgColor } },
-                        showCaseBadge: this.settings.locationHeaderSettings.showCaseBadge,
-                        badgeBgColor: { solid: { color: this.settings.locationHeaderSettings.badgeBgColor } },
-                        badgeTextColor: { solid: { color: this.settings.locationHeaderSettings.badgeTextColor } }
+                        showHeader: this.settings.groupHeaderSettings.showHeader,
+                        headerHeight: this.settings.groupHeaderSettings.headerHeight,
+                        headerFontSize: this.settings.groupHeaderSettings.headerFontSize,
+                        headerFontColor: { solid: { color: this.settings.groupHeaderSettings.headerFontColor } },
+                        headerBgColor: { solid: { color: this.settings.groupHeaderSettings.headerBgColor } },
+                        showMetricBadge: this.settings.groupHeaderSettings.showMetricBadge,
+                        badgeBgColor: { solid: { color: this.settings.groupHeaderSettings.badgeBgColor } },
+                        badgeTextColor: { solid: { color: this.settings.groupHeaderSettings.badgeTextColor } }
                     }
                 });
                 break;
@@ -1698,24 +1698,24 @@ export class Visual implements IVisual {
                         showBorder: this.settings.barSettings.showBorder,
                         borderColor: { solid: { color: this.settings.barSettings.borderColor } },
                         borderWidth: this.settings.barSettings.borderWidth,
-                        showCaseNotches: this.settings.barSettings.showCaseNotches,
+                        showMetricNotches: this.settings.barSettings.showMetricNotches,
                         overlapMode: this.settings.barSettings.overlapMode
                     }
                 });
                 break;
-            case "caseLabelSettings":
+            case "labelSettings":
                 instances.push({
-                    objectName: "caseLabelSettings",
+                    objectName: "labelSettings",
                     selector: (null as any),
                     properties: {
-                        show: this.settings.caseLabelSettings.show,
-                        labelPosition: this.settings.caseLabelSettings.labelPosition,
-                        labelContent: this.settings.caseLabelSettings.labelContent,
-                        fontSize: this.settings.caseLabelSettings.fontSize,
-                        fontColor: { solid: { color: this.settings.caseLabelSettings.fontColor } },
-                        badgeBgColor: { solid: { color: this.settings.caseLabelSettings.badgeBgColor } },
-                        prefix: this.settings.caseLabelSettings.prefix,
-                        suffix: this.settings.caseLabelSettings.suffix
+                        show: this.settings.labelSettings.show,
+                        labelPosition: this.settings.labelSettings.labelPosition,
+                        labelContent: this.settings.labelSettings.labelContent,
+                        fontSize: this.settings.labelSettings.fontSize,
+                        fontColor: { solid: { color: this.settings.labelSettings.fontColor } },
+                        badgeBgColor: { solid: { color: this.settings.labelSettings.badgeBgColor } },
+                        prefix: this.settings.labelSettings.prefix,
+                        suffix: this.settings.labelSettings.suffix
                     }
                 });
                 break;
@@ -1725,7 +1725,7 @@ export class Visual implements IVisual {
                     selector: (null as any),
                     properties: {
                         timeFormat: this.settings.timeAxisSettings.timeFormat,
-                        clampToSurgicalDay: this.settings.timeAxisSettings.clampToSurgicalDay,
+                        clampToDailyWindow: this.settings.timeAxisSettings.clampToDailyWindow,
                         dayStartHour: this.settings.timeAxisSettings.dayStartHour,
                         dayEndHour: this.settings.timeAxisSettings.dayEndHour,
                         fontSize: this.settings.timeAxisSettings.fontSize,
@@ -1742,19 +1742,19 @@ export class Visual implements IVisual {
                     properties: {
                         showNowLine: this.settings.referenceLineSettings.showNowLine,
                         nowLineColor: { solid: { color: this.settings.referenceLineSettings.nowLineColor } },
-                        showShiftChangeLines: this.settings.referenceLineSettings.showShiftChangeLines,
-                        shiftChangeColor: { solid: { color: this.settings.referenceLineSettings.shiftChangeColor } }
+                        showMilestoneLines: this.settings.referenceLineSettings.showMilestoneLines,
+                        milestoneLineColor: { solid: { color: this.settings.referenceLineSettings.milestoneLineColor } }
                     }
                 });
                 break;
-            case "overtimeSettings":
+            case "thresholdAlertSettings":
                 instances.push({
-                    objectName: "overtimeSettings",
+                    objectName: "thresholdAlertSettings",
                     selector: (null as any),
                     properties: {
-                        highlightLongShifts: this.settings.overtimeSettings.highlightLongShifts,
-                        thresholdHours: this.settings.overtimeSettings.thresholdHours,
-                        warningBorderColor: { solid: { color: this.settings.overtimeSettings.warningBorderColor } }
+                        highlightLongIntervals: this.settings.thresholdAlertSettings.highlightLongIntervals,
+                        thresholdHours: this.settings.thresholdAlertSettings.thresholdHours,
+                        warningBorderColor: { solid: { color: this.settings.thresholdAlertSettings.warningBorderColor } }
                     }
                 });
                 break;
@@ -1763,8 +1763,8 @@ export class Visual implements IVisual {
                     objectName: "sortSettings",
                     selector: (null as any),
                     properties: {
-                        locationSort: this.settings.sortSettings.locationSort,
-                        providerSort: this.settings.sortSettings.providerSort
+                        groupSort: this.settings.sortSettings.groupSort,
+                        resourceSort: this.settings.sortSettings.resourceSort
                     }
                 });
                 break;
