@@ -18,6 +18,7 @@ interface ScheduleItem {
     groupName: string;
     resourceName: string;
     category: string;
+    isShiftEnvelope: boolean;
     startDate: Date;
     endDate: Date;
     primaryMetric: number;
@@ -26,11 +27,25 @@ interface ScheduleItem {
     selectionId: powerbi.visuals.ISelectionId;
 }
 
+interface IdleGap {
+    startDate: Date;
+    endDate: Date;
+    gapMinutes: number;
+    gapType: string;
+}
+
 interface ResourceRow {
     resourceName: string;
     items: ScheduleItem[];
+    gaps: IdleGap[];
     maxSubRows: number;
     totalMetric: number;
+    totalPrimary: number;
+    totalSecondary: number;
+    subsidyNeeded: number;
+    selfFundedPct: number;
+    shiftHours: number;
+    caseHours: number;
     earliestStart: Date;
 }
 
@@ -38,6 +53,12 @@ interface GroupSwimlane {
     groupName: string;
     resources: ResourceRow[];
     totalMetric: number;
+    totalPrimary: number;
+    totalSecondary: number;
+    subsidyNeeded: number;
+    selfFundedPct: number;
+    shiftHours: number;
+    caseHours: number;
 }
 
 interface VisualSettings {
@@ -145,11 +166,11 @@ export class Visual implements IVisual {
             colorPaletteSettings: { palette: "powerBi" },
             legendSettings: { show: true, position: "Top", fontSize: 10, fontColor: "#444444" },
             swimlaneSettings: {
-                rowHeight: 38,
-                barHeightPercent: 72,
-                resourceColumnWidth: 160,
+                rowHeight: 42,
+                barHeightPercent: 76,
+                resourceColumnWidth: 225,
                 resourceFontSize: 10,
-                resourceFontColor: "#333333",
+                resourceFontColor: "#1E293B",
                 showZebraStriping: true,
                 evenRowColor: "#FFFFFF",
                 oddRowColor: "#F8FAFC",
@@ -158,12 +179,12 @@ export class Visual implements IVisual {
             },
             groupHeaderSettings: {
                 showHeader: true,
-                headerHeight: 28,
+                headerHeight: 30,
                 headerFontSize: 11,
                 headerFontColor: "#0F172A",
                 headerBgColor: "#E2E8F0",
                 showMetricBadge: true,
-                badgeBgColor: "#3B82F6",
+                badgeBgColor: "#1E293B",
                 badgeTextColor: "#FFFFFF"
             },
             barSettings: {
@@ -172,7 +193,7 @@ export class Visual implements IVisual {
                 showBorder: true,
                 borderColor: "#FFFFFF",
                 borderWidth: 1.5,
-                showMetricNotches: true,
+                showMetricNotches: false,
                 overlapMode: "stagger"
             },
             labelSettings: {
@@ -181,9 +202,9 @@ export class Visual implements IVisual {
                 labelContent: "metricOnly",
                 fontSize: 9,
                 fontColor: "#FFFFFF",
-                badgeBgColor: "rgba(15, 23, 42, 0.75)",
-                prefix: "none",
-                suffix: " cases"
+                badgeBgColor: "rgba(15, 23, 42, 0.78)",
+                prefix: "$",
+                suffix: "none"
             },
             timeAxisSettings: {
                 timeFormat: "auto",
@@ -337,18 +358,19 @@ export class Visual implements IVisual {
         const viewportWidth = options.viewport.width;
         const categories = dataView.categorical.categories || [];
         const values = dataView.categorical.values || [];
-        if (categories.length < 5) return;
 
         const grpCol = categories.find(c => c.source.roles && c.source.roles["group"]) || categories[0];
-        const resCol = categories.find(c => c.source.roles && c.source.roles["item"]) || categories[1];
-        const catCol = categories.find(c => c.source.roles && c.source.roles["category"]) || categories[2];
-        const startCol = categories.find(c => c.source.roles && c.source.roles["startDate"]) || categories[3];
-        const endCol = categories.find(c => c.source.roles && c.source.roles["endDate"]) || categories[4];
+        const resCol = categories.find(c => c.source.roles && c.source.roles["item"]) || categories[1] || grpCol;
+        const catCol = categories.find(c => c.source.roles && c.source.roles["category"]);
+        const startCol = categories.find(c => c.source.roles && c.source.roles["startDate"]) || categories[categories.length - 2];
+        const endCol = categories.find(c => c.source.roles && c.source.roles["endDate"]) || categories[categories.length - 1];
+
+        if (!startCol || !endCol) return;
 
         const primaryCol = values.find(v => v.source.roles && v.source.roles["primaryMetric"]) || values[0];
         const secondaryCol = values.find(v => v.source.roles && v.source.roles["secondaryMetric"]) || values[1];
 
-        const rowCount = grpCol.values.length;
+        const rowCount = startCol.values.length;
         const rawItems: ScheduleItem[] = [];
         let minDate: Date = new Date(8640000000000000);
         let maxDate: Date = new Date(-8640000000000000);
@@ -362,34 +384,42 @@ export class Visual implements IVisual {
             let endDate = rawEnd ? new Date(String(rawEnd)) : new Date(startDate.getTime() + 3600000);
             if (isNaN(startDate.getTime())) continue;
             if (isNaN(endDate.getTime()) || endDate <= startDate) {
-                endDate = new Date(startDate.getTime() + 3600000);
+                endDate = new Date(startDate.getTime() + 900000);
             }
 
             if (startDate < minDate) minDate = startDate;
             if (endDate > maxDate) maxDate = endDate;
 
-            const selectionId = this.host.createSelectionIdBuilder()
-                .withCategory(resCol, i)
-                .withCategory(catCol, i)
-                .createSelectionId();
+            const catStr = String(catCol ? (catCol.values[i] ?? "Standard") : "Standard");
+            const pMetric = Number(primaryCol?.values[i]) || 0;
+            const sMetric = Number(secondaryCol?.values[i]) || 0;
+
+            const isShiftEnvelope =
+                catStr.toUpperCase().includes("1. SHIFT") ||
+                catStr.toUpperCase().includes("SHIFT:") ||
+                (sMetric > 0 && pMetric === 0);
+
+            const selectionBuilder = this.host.createSelectionIdBuilder();
+            if (resCol) selectionBuilder.withCategory(resCol, i);
+            if (catCol) selectionBuilder.withCategory(catCol, i);
 
             rawItems.push({
                 id: `${i}`,
-                groupName: String(grpCol.values[i] ?? "Primary Group"),
-                resourceName: String(resCol.values[i] ?? "Unassigned"),
-                category: String(catCol.values[i] ?? "Standard"),
+                groupName: String(grpCol ? (grpCol.values[i] ?? "Primary Group") : "Primary Group"),
+                resourceName: String(resCol ? (resCol.values[i] ?? "Unassigned") : "Unassigned"),
+                category: catStr,
+                isShiftEnvelope,
                 startDate,
                 endDate,
-                primaryMetric: Number(primaryCol?.values[i]) || 0,
-                secondaryMetric: Number(secondaryCol?.values[i]) || 0,
+                primaryMetric: pMetric,
+                secondaryMetric: sMetric,
                 subRowIndex: 0,
-                selectionId
+                selectionId: selectionBuilder.createSelectionId()
             });
         }
 
         if (rawItems.length === 0) return;
 
-        // Daily Time Window Clamping (e.g. 07:00 to 19:00)
         if (this.settings.timeAxisSettings.clampToDailyWindow) {
             const startH = Math.max(0, Math.min(23, this.settings.timeAxisSettings.dayStartHour));
             const endH = Math.max(1, Math.min(24, this.settings.timeAxisSettings.dayEndHour));
@@ -410,7 +440,6 @@ export class Visual implements IVisual {
         const uniqueCategories = Array.from(new Set(rawItems.map(s => s.category)));
         const colorScale = this.getColorScale(uniqueCategories);
 
-        // Group Hierarchy: Group -> Resource with Concurrency Overlap Management
         const groupMap = new Map<string, Map<string, ScheduleItem[]>>();
         rawItems.forEach(s => {
             if (!groupMap.has(s.groupName)) groupMap.set(s.groupName, new Map<string, ScheduleItem[]>());
@@ -422,16 +451,27 @@ export class Visual implements IVisual {
         const groups: GroupSwimlane[] = [];
         groupMap.forEach((rMap, grpName) => {
             const resourceRows: ResourceRow[] = [];
-            let grpMetric = 0;
+            let grpPrimary = 0;
+            let grpSecondary = 0;
+            let grpShiftHrs = 0;
+            let grpCaseHrs = 0;
 
             rMap.forEach((itemList, rName) => {
-                itemList.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+                // Render Shift Envelopes first (in background), then nested Case bars on top
+                itemList.sort((a, b) => {
+                    if (a.isShiftEnvelope !== b.isShiftEnvelope) return a.isShiftEnvelope ? -1 : 1;
+                    return a.startDate.getTime() - b.startDate.getTime();
+                });
 
-                // Stagger algorithm for concurrent overlapping intervals
+                const shifts = itemList.filter(x => x.isShiftEnvelope);
+                const cases = itemList.filter(x => !x.isShiftEnvelope);
+
+                // Assign sub-lanes among concurrent Cases (Shift Envelopes span full row height)
                 let maxSubRows = 1;
                 if (this.settings.barSettings.overlapMode === "stagger") {
+                    const targets = cases.length > 0 ? cases : shifts;
                     const lanes: Date[] = [];
-                    itemList.forEach(item => {
+                    targets.forEach(item => {
                         let assignedLane = -1;
                         for (let l = 0; l < lanes.length; l++) {
                             if (item.startDate >= lanes[l]) {
@@ -449,42 +489,115 @@ export class Visual implements IVisual {
                     maxSubRows = Math.max(1, lanes.length);
                 }
 
-                let rMetric = 0;
+                // Merge overlapping case intervals to find true uncovered idle gaps inside active shifts
+                const gaps: IdleGap[] = [];
+                if (cases.length > 0) {
+                    const sortedCases = [...cases].sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+                    const mergedBusy: { start: Date; end: Date }[] = [];
+                    sortedCases.forEach(c => {
+                        if (mergedBusy.length === 0) {
+                            mergedBusy.push({ start: c.startDate, end: c.endDate });
+                        } else {
+                            const last = mergedBusy[mergedBusy.length - 1];
+                            if (c.startDate <= last.end) {
+                                if (c.endDate > last.end) last.end = c.endDate;
+                            } else {
+                                mergedBusy.push({ start: c.startDate, end: c.endDate });
+                            }
+                        }
+                    });
+
+                    for (let b = 0; b < mergedBusy.length - 1; b++) {
+                        const gapStart = mergedBusy[b].end;
+                        const gapEnd = mergedBusy[b + 1].start;
+                        const diffMins = (gapEnd.getTime() - gapStart.getTime()) / 60000;
+                        const sameDay = gapStart.toDateString() === gapEnd.toDateString();
+
+                        const insideShift = shifts.some(s => gapStart >= s.startDate && gapEnd <= s.endDate);
+                        if (diffMins >= 30 && ((insideShift && diffMins <= 300) || (sameDay && diffMins <= 180))) {
+                            gaps.push({
+                                startDate: gapStart,
+                                endDate: gapEnd,
+                                gapMinutes: Math.round(diffMins),
+                                gapType: "Turnover / Idle Gap"
+                            });
+                        }
+                    }
+                }
+
+                let rPrimary = 0;
+                let rSecondary = 0;
+                let rShiftHrs = 0;
+                let rCaseHrs = 0;
                 let earliest = itemList[0].startDate;
+
                 itemList.forEach(item => {
-                    rMetric += item.primaryMetric;
+                    rPrimary += item.primaryMetric;
+                    rSecondary += item.secondaryMetric;
+                    const hrs = (item.endDate.getTime() - item.startDate.getTime()) / 3600000;
+                    if (item.isShiftEnvelope) {
+                        // Exclude 15+ hr overnight home-call envelopes from daytime OR shift utilization denominator
+                        const isCallStandby = item.category.toUpperCase().includes("CALL") && hrs > 12;
+                        if (!isCallStandby) rShiftHrs += hrs;
+                    } else {
+                        rCaseHrs += hrs;
+                    }
                     if (item.startDate < earliest) earliest = item.startDate;
                 });
-                grpMetric += rMetric;
+
+                grpPrimary += rPrimary;
+                grpSecondary += rSecondary;
+                grpShiftHrs += rShiftHrs;
+                grpCaseHrs += rCaseHrs;
+
+                const rSubsidy = Math.max(0, rSecondary - rPrimary);
+                const rSelfFunded = rSecondary > 0 ? Math.round((rPrimary / rSecondary) * 100) : 100;
 
                 resourceRows.push({
                     resourceName: rName,
                     items: itemList,
+                    gaps,
                     maxSubRows,
-                    totalMetric: rMetric,
+                    totalMetric: rCaseHrs,
+                    totalPrimary: rPrimary,
+                    totalSecondary: rSecondary,
+                    subsidyNeeded: rSubsidy,
+                    selfFundedPct: rSelfFunded,
+                    shiftHours: rShiftHrs,
+                    caseHours: rCaseHrs,
                     earliestStart: earliest
                 });
             });
 
-            // Resource Sorting inside Group
             const rSort = this.settings.sortSettings.resourceSort;
             if (rSort === "asc") resourceRows.sort((a, b) => a.resourceName.localeCompare(b.resourceName));
             else if (rSort === "desc") resourceRows.sort((a, b) => b.resourceName.localeCompare(a.resourceName));
-            else if (rSort === "metricDesc") resourceRows.sort((a, b) => b.totalMetric - a.totalMetric);
-            else if (rSort === "metricAsc") resourceRows.sort((a, b) => a.totalMetric - b.totalMetric);
+            else if (rSort === "metricDesc") resourceRows.sort((a, b) => b.caseHours - a.caseHours);
+            else if (rSort === "metricAsc") resourceRows.sort((a, b) => a.caseHours - b.caseHours);
             else if (rSort === "startAsc") resourceRows.sort((a, b) => a.earliestStart.getTime() - b.earliestStart.getTime());
 
-            groups.push({ groupName: grpName, resources: resourceRows, totalMetric: grpMetric });
+            const grpSubsidy = Math.max(0, grpSecondary - grpPrimary);
+            const grpSelfFunded = grpSecondary > 0 ? Math.round((grpPrimary / grpSecondary) * 100) : 100;
+
+            groups.push({
+                groupName: grpName,
+                resources: resourceRows,
+                totalMetric: grpCaseHrs,
+                totalPrimary: grpPrimary,
+                totalSecondary: grpSecondary,
+                subsidyNeeded: grpSubsidy,
+                selfFundedPct: grpSelfFunded,
+                shiftHours: grpShiftHrs,
+                caseHours: grpCaseHrs
+            });
         });
 
-        // Group Swimlane Sorting
         const gSort = this.settings.sortSettings.groupSort;
         if (gSort === "asc") groups.sort((a, b) => a.groupName.localeCompare(b.groupName));
         else if (gSort === "desc") groups.sort((a, b) => b.groupName.localeCompare(a.groupName));
-        else if (gSort === "metricDesc") groups.sort((a, b) => b.totalMetric - a.totalMetric);
-        else if (gSort === "metricAsc") groups.sort((a, b) => a.totalMetric - b.totalMetric);
+        else if (gSort === "metricDesc") groups.sort((a, b) => b.totalPrimary - a.totalPrimary);
+        else if (gSort === "metricAsc") groups.sort((a, b) => a.totalPrimary - b.totalPrimary);
 
-        // Legend Rendering
         let legendMarginTop = 10;
         if (this.settings.legendSettings.show && uniqueCategories.length > 0) {
             legendMarginTop = this.renderLegend(uniqueCategories, colorScale, viewportWidth);
@@ -520,7 +633,6 @@ export class Visual implements IVisual {
             this.svg.selectAll(".gantt-bar").attr("opacity", this.settings.barSettings.barOpacity / 100);
         });
 
-        // Sticky Timeline Axis
         const axisGroup = this.chartContainer.append("g")
             .attr("class", "time-axis-group")
             .attr("transform", `translate(${timelineX}, ${timeAxisHeight - 12})`);
@@ -532,7 +644,7 @@ export class Visual implements IVisual {
                 if (this.settings.timeAxisSettings.timeFormat === "12hour") return d3.timeFormat("%I:%M %p")(date);
                 if (this.settings.timeAxisSettings.timeFormat === "24hour") return d3.timeFormat("%H:%M")(date);
                 if (this.settings.timeAxisSettings.timeFormat === "dateTimeShort") return d3.timeFormat("%b %d, %H:%M")(date);
-                return d3.timeFormat("%b %d, %H:%M")(date);
+                return d3.timeFormat("%b %d, %I:%M %p")(date);
             });
 
         axisGroup.call(timeAxis);
@@ -540,13 +652,12 @@ export class Visual implements IVisual {
             .attr("font-size", `${this.settings.timeAxisSettings.fontSize}px`)
             .attr("fill", this.settings.timeAxisSettings.fontColor);
 
-        // Render Groups, Swimlanes & Interval Bars
         let currentY = timeAxisHeight;
         const prefix = cleanAffix(this.settings.labelSettings.prefix);
         const suffix = cleanAffix(this.settings.labelSettings.suffix);
+        const fmtCurrency = d3.format("$,.0f");
 
         groups.forEach(grp => {
-            // Group Header Banner
             if (this.settings.groupHeaderSettings.showHeader) {
                 const groupHeader = this.chartContainer.append("g")
                     .attr("class", "group-header")
@@ -568,10 +679,21 @@ export class Visual implements IVisual {
                     .attr("fill", this.settings.groupHeaderSettings.headerFontColor)
                     .text(grp.groupName);
 
+                // Facility Banner Badge: Shows Patient Rev, Staffing Cost, Self-Funded % / Subsidy Needed, & OR Util %
                 if (this.settings.groupHeaderSettings.showMetricBadge) {
-                    const badgeText = `${grp.totalMetric} Total`;
-                    const badgeWidth = Math.max(70, badgeText.length * 7 + 16);
+                    const utilPct = grp.shiftHours > 0 ? Math.round((grp.caseHours / grp.shiftHours) * 100) : 0;
+                    const rawGap = grp.totalSecondary - grp.totalPrimary;
+                    const fundingText = rawGap > 0
+                        ? `${grp.selfFundedPct}% Self-Funded (${fmtCurrency(rawGap)} Subsidy Needed)`
+                        : `${grp.selfFundedPct}% Self-Funded (+${fmtCurrency(Math.abs(rawGap))} Surplus)`;
+
+                    const badgeText = grp.totalSecondary > 0 || grp.totalPrimary > 0
+                        ? `Patient Rev: ${fmtCurrency(grp.totalPrimary)}  |  Staffing: ${fmtCurrency(grp.totalSecondary)}  |  ${fundingText}  |  OR Util: ${utilPct}%`
+                        : `${grp.totalPrimary} Total`;
+
+                    const badgeWidth = Math.max(90, badgeText.length * 6.0 + 22);
                     const badgeX = timelineX;
+                    const badgeColor = rawGap <= 0 ? "#059669" : this.settings.groupHeaderSettings.badgeBgColor;
 
                     groupHeader.append("rect")
                         .attr("x", badgeX)
@@ -579,13 +701,13 @@ export class Visual implements IVisual {
                         .attr("width", badgeWidth)
                         .attr("height", headerHeight - 8)
                         .attr("rx", (headerHeight - 8) / 2)
-                        .attr("fill", this.settings.groupHeaderSettings.badgeBgColor);
+                        .attr("fill", badgeColor);
 
                     groupHeader.append("text")
                         .attr("x", badgeX + badgeWidth / 2)
                         .attr("y", headerHeight / 2 + 3.5)
                         .attr("text-anchor", "middle")
-                        .attr("font-size", "9px")
+                        .attr("font-size", "9.5px")
                         .attr("font-weight", "bold")
                         .attr("fill", this.settings.groupHeaderSettings.badgeTextColor)
                         .text(badgeText);
@@ -594,14 +716,12 @@ export class Visual implements IVisual {
                 currentY += headerHeight;
             }
 
-            // Resource Swimlanes
             grp.resources.forEach((res, rIdx) => {
                 const computedRowHeight = baseRowHeight * res.maxSubRows;
                 const rowGroup = this.chartContainer.append("g")
                     .attr("class", "resource-row")
                     .attr("transform", `translate(0, ${currentY})`);
 
-                // Alternating row background
                 const rowBgColor = rIdx % 2 === 0 ? this.settings.swimlaneSettings.evenRowColor : this.settings.swimlaneSettings.oddRowColor;
                 if (this.settings.swimlaneSettings.showZebraStriping) {
                     rowGroup.append("rect")
@@ -612,7 +732,6 @@ export class Visual implements IVisual {
                         .attr("fill", rowBgColor);
                 }
 
-                // Row Divider
                 if (this.settings.swimlaneSettings.showRowBorders) {
                     rowGroup.append("line")
                         .attr("x1", 0)
@@ -623,16 +742,40 @@ export class Visual implements IVisual {
                         .attr("stroke-width", 1);
                 }
 
-                // Resource Name Label
+                // Provider / Resource Name + Operational Case vs. Shift Standby Sub-Label
                 rowGroup.append("text")
                     .attr("x", 12)
-                    .attr("y", computedRowHeight / 2 + 4)
+                    .attr("y", computedRowHeight / 2 - 2)
                     .attr("font-size", `${this.settings.swimlaneSettings.resourceFontSize}px`)
                     .attr("font-weight", "600")
                     .attr("fill", this.settings.swimlaneSettings.resourceFontColor)
                     .text(res.resourceName);
 
-                // Vertical Gridlines across row
+                let subText = "";
+                let subColor = "#475569";
+                if (res.shiftHours > 0 && res.caseHours > 0) {
+                    const standbyHrs = Math.max(0, res.shiftHours - res.caseHours);
+                    const rowUtil = Math.round((res.caseHours / res.shiftHours) * 100);
+                    subText = `${res.caseHours.toFixed(1)}h Cases / ${res.shiftHours.toFixed(1)}h Shift (${standbyHrs.toFixed(1)}h Standby | ${rowUtil}% Util)`;
+                    subColor = rowUtil >= 70 ? "#059669" : "#475569";
+                } else if (res.shiftHours > 0 && res.caseHours === 0) {
+                    subText = `${res.shiftHours.toFixed(1)}h Scheduled Shift (0h OR Cases / Board / Call)`;
+                    subColor = "#64748B";
+                } else if (res.caseHours > 0 && res.shiftHours === 0) {
+                    subText = `${res.caseHours.toFixed(1)}h Cases | Rev ${fmtCurrency(res.totalPrimary)} (Call-In / Unlinked Shift)`;
+                    subColor = "#2563EB";
+                }
+
+                if (subText !== "") {
+                    rowGroup.append("text")
+                        .attr("x", 12)
+                        .attr("y", computedRowHeight / 2 + 11)
+                        .attr("font-size", "8.5px")
+                        .attr("font-weight", "600")
+                        .attr("fill", subColor)
+                        .text(subText);
+                }
+
                 if (this.settings.timeAxisSettings.showGridlines) {
                     const ticks = timeScale.ticks(Math.max(4, Math.floor(timelineWidth / 115)));
                     ticks.forEach(t => {
@@ -647,35 +790,46 @@ export class Visual implements IVisual {
                     });
                 }
 
-                // Render Interval Bars
                 const subSlotHeight = computedRowHeight / res.maxSubRows;
-                const barH = subSlotHeight * (this.settings.swimlaneSettings.barHeightPercent / 100);
-                const barPadY = (subSlotHeight - barH) / 2;
+                const hasShiftAndCase = res.items.some(x => x.isShiftEnvelope) && res.items.some(x => !x.isShiftEnvelope);
 
                 res.items.forEach(item => {
                     const x0 = timelineX + timeScale(item.startDate);
                     const x1 = timelineX + timeScale(item.endDate);
                     const barW = Math.max(5, x1 - x0);
-                    const barY = item.subRowIndex * subSlotHeight + barPadY;
 
+                    let barH: number;
+                    let barY: number;
+                    if (item.isShiftEnvelope) {
+                        barH = Math.max(12, computedRowHeight - 6);
+                        barY = 3;
+                    } else {
+                        const rawCaseH = subSlotHeight * (this.settings.swimlaneSettings.barHeightPercent / 100);
+                        barH = hasShiftAndCase ? Math.max(10, rawCaseH * 0.78) : rawCaseH;
+                        barY = item.subRowIndex * subSlotHeight + (subSlotHeight - barH) / 2;
+                    }
+
+                    const barOpacity = item.isShiftEnvelope ? 0.25 : (this.settings.barSettings.barOpacity / 100);
                     const durationHrs = (item.endDate.getTime() - item.startDate.getTime()) / 3600000;
                     const isAlert = this.settings.thresholdAlertSettings.highlightLongIntervals && (durationHrs >= this.settings.thresholdAlertSettings.thresholdHours);
-                    const pacing = item.primaryMetric > 0 ? (item.primaryMetric / durationHrs).toFixed(1) : "0";
 
+                    const rowStandby = Math.max(0, res.shiftHours - res.caseHours);
                     const tooltipItems: VisualTooltipDataItem[] = [
-                        { displayName: "Group", value: item.groupName },
-                        { displayName: "Resource", value: item.resourceName },
-                        { displayName: "Category", value: item.category },
-                        { displayName: "Start", value: d3.timeFormat("%m/%d %H:%M")(item.startDate) },
-                        { displayName: "End", value: d3.timeFormat("%m/%d %H:%M")(item.endDate) },
-                        { displayName: "Duration", value: `${durationHrs.toFixed(2)} hrs` },
-                        { displayName: "Primary Metric", value: `${item.primaryMetric}` },
-                        { displayName: "Rate / Pacing", value: `${pacing}/hr` },
-                        ...(item.secondaryMetric > 0 ? [{ displayName: "Secondary Metric", value: d3.format(",.2f")(item.secondaryMetric) }] : [])
+                        { displayName: "Facility / Group", value: item.groupName },
+                        { displayName: "Provider / OR", value: item.resourceName },
+                        { displayName: "Event / Procedure", value: item.category },
+                        { displayName: "Start", value: d3.timeFormat("%m/%d %I:%M %p")(item.startDate) },
+                        { displayName: "End", value: d3.timeFormat("%m/%d %I:%M %p")(item.endDate) },
+                        { displayName: "Duration", value: `${durationHrs.toFixed(2)} hrs (${Math.round(durationHrs * 60)} mins)` },
+                        ...(item.primaryMetric > 0 ? [{ displayName: "Expected Revenue ($)", value: fmtCurrency(item.primaryMetric) }] : []),
+                        ...(item.secondaryMetric > 0 ? [{ displayName: "Shift Cost ($)", value: fmtCurrency(item.secondaryMetric) }] : []),
+                        { displayName: "Row Case vs. Shift Hrs", value: `${res.caseHours.toFixed(1)}h Cases / ${res.shiftHours.toFixed(1)}h Shift (${rowStandby.toFixed(1)}h Standby)` }
                     ];
 
-                    const strokeColor = isAlert ? this.settings.thresholdAlertSettings.warningBorderColor : this.settings.barSettings.borderColor;
-                    const strokeWidth = isAlert ? 2.5 : (this.settings.barSettings.showBorder ? this.settings.barSettings.borderWidth : 0);
+                    const strokeColor = isAlert
+                        ? this.settings.thresholdAlertSettings.warningBorderColor
+                        : (item.isShiftEnvelope ? "#0F172A" : this.settings.barSettings.borderColor);
+                    const strokeWidth = isAlert ? 2.2 : (item.isShiftEnvelope ? 1.5 : (this.settings.barSettings.showBorder ? this.settings.barSettings.borderWidth : 0));
 
                     const barRect = rowGroup.append("rect")
                         .attr("class", "gantt-bar")
@@ -685,14 +839,15 @@ export class Visual implements IVisual {
                         .attr("height", barH)
                         .attr("rx", this.settings.barSettings.barCornerRadius)
                         .attr("fill", colorScale(item.category))
-                        .attr("fill-opacity", this.settings.barSettings.barOpacity / 100)
+                        .attr("fill-opacity", barOpacity)
                         .attr("stroke", strokeColor)
                         .attr("stroke-width", strokeWidth)
+                        .attr("stroke-dasharray", item.isShiftEnvelope ? "4,2" : "none")
                         .attr("cursor", "pointer");
 
                     barRect
                         .on("mouseover", (event: MouseEvent) => {
-                            barRect.attr("fill-opacity", 1).attr("stroke", "#0F172A");
+                            barRect.attr("fill-opacity", item.isShiftEnvelope ? 0.45 : 1).attr("stroke", "#0F172A");
                             this.tooltipService.show({
                                 coordinates: [event.clientX, event.clientY],
                                 isTouchEvent: false,
@@ -709,7 +864,7 @@ export class Visual implements IVisual {
                             });
                         })
                         .on("mouseout", () => {
-                            barRect.attr("fill-opacity", this.settings.barSettings.barOpacity / 100).attr("stroke", strokeColor);
+                            barRect.attr("fill-opacity", barOpacity).attr("stroke", strokeColor);
                             this.tooltipService.hide({ immediately: true, isTouchEvent: false });
                         })
                         .on("click", (event: MouseEvent) => {
@@ -717,9 +872,8 @@ export class Visual implements IVisual {
                             this.selectionManager.select(item.selectionId, event.ctrlKey || event.metaKey);
                         });
 
-                    // Micro Metric Notches along bottom edge of the bar
-                    if (this.settings.barSettings.showMetricNotches && item.primaryMetric > 0 && barW > 25) {
-                        const notchCount = Math.min(item.primaryMetric, 15);
+                    if (this.settings.barSettings.showMetricNotches && item.primaryMetric > 0 && !item.isShiftEnvelope && barW > 25) {
+                        const notchCount = Math.min(Math.round(item.primaryMetric), 15);
                         const step = barW / (notchCount + 1);
                         for (let k = 1; k <= notchCount; k++) {
                             rowGroup.append("line")
@@ -733,11 +887,11 @@ export class Visual implements IVisual {
                         }
                     }
 
-                    // Data Labels & Floating Badges
-                    if (this.settings.labelSettings.show && item.primaryMetric > 0) {
-                        let content = `${prefix}${item.primaryMetric}${suffix}`;
+                    if (this.settings.labelSettings.show && !item.isShiftEnvelope && item.primaryMetric > 0) {
+                        const metricVal = prefix === "$" ? fmtCurrency(item.primaryMetric) : `${prefix}${Math.round(item.primaryMetric)}${suffix}`;
+                        let content = metricVal;
                         if (this.settings.labelSettings.labelContent === "metricAndDuration") {
-                            content = `${item.primaryMetric} (${durationHrs.toFixed(1)}h)`;
+                            content = `${metricVal} (${durationHrs.toFixed(1)}h)`;
                         } else if (this.settings.labelSettings.labelContent === "durationOnly") {
                             content = `${durationHrs.toFixed(1)}h`;
                         }
@@ -746,12 +900,12 @@ export class Visual implements IVisual {
                         const fontSize = this.settings.labelSettings.fontSize;
 
                         if (pos === "pillBadge") {
-                            const badgeW = Math.max(30, content.length * 6 + 12);
-                            const badgeH = Math.min(barH - 4, 18);
-                            const badgeX = x0 + Math.max(4, (barW - badgeW) / 2);
+                            const badgeW = Math.max(30, content.length * 5.8 + 10);
+                            const badgeH = Math.min(barH - 2, 16);
+                            const badgeX = x0 + Math.max(2, (barW - badgeW) / 2);
                             const badgeY = barY + (barH - badgeH) / 2;
 
-                            if (barW > 35) {
+                            if (barW > 32) {
                                 rowGroup.append("rect")
                                     .attr("x", badgeX)
                                     .attr("y", badgeY)
@@ -791,18 +945,49 @@ export class Visual implements IVisual {
                                 .attr("fill", "#1E293B")
                                 .attr("pointer-events", "none")
                                 .text(content);
-                        } else {
-                            if (barW > 32) {
-                                rowGroup.append("text")
-                                    .attr("x", x0 + barW / 2)
-                                    .attr("y", barY + barH / 2 + 3.5)
-                                    .attr("text-anchor", "middle")
-                                    .attr("font-size", `${fontSize}px`)
-                                    .attr("font-weight", "bold")
-                                    .attr("fill", this.settings.labelSettings.fontColor)
-                                    .attr("pointer-events", "none")
-                                    .text(content);
-                            }
+                        } else if (barW > 30) {
+                            rowGroup.append("text")
+                                .attr("x", x0 + barW / 2)
+                                .attr("y", barY + barH / 2 + 3.5)
+                                .attr("text-anchor", "middle")
+                                .attr("font-size", `${fontSize}px`)
+                                .attr("font-weight", "bold")
+                                .attr("fill", this.settings.labelSettings.fontColor)
+                                .attr("pointer-events", "none")
+                                .text(content);
+                        }
+                    }
+                });
+
+                // Render Idle / Turnover Gap Callouts Inside Shift Envelopes
+                res.gaps.forEach(gap => {
+                    const gx0 = timelineX + timeScale(gap.startDate);
+                    const gx1 = timelineX + timeScale(gap.endDate);
+                    const gw = Math.max(4, gx1 - gx0);
+                    if (gw > 18) {
+                        const gy = 6;
+                        const gh = Math.max(12, computedRowHeight - 12);
+                        rowGroup.append("rect")
+                            .attr("x", gx0)
+                            .attr("y", gy)
+                            .attr("width", gw)
+                            .attr("height", gh)
+                            .attr("fill", "rgba(239, 68, 68, 0.15)")
+                            .attr("stroke", "#EF4444")
+                            .attr("stroke-width", 1)
+                            .attr("stroke-dasharray", "2,2")
+                            .attr("pointer-events", "none");
+
+                        if (gw > 36) {
+                            rowGroup.append("text")
+                                .attr("x", gx0 + gw / 2)
+                                .attr("y", gy + gh / 2 + 3)
+                                .attr("text-anchor", "middle")
+                                .attr("font-size", "8px")
+                                .attr("font-weight", "bold")
+                                .attr("fill", "#B91C1C")
+                                .attr("pointer-events", "none")
+                                .text(`${gap.gapMinutes}m gap`);
                         }
                     }
                 });
@@ -813,7 +998,6 @@ export class Visual implements IVisual {
             currentY += 8;
         });
 
-        // Milestone and Live Time Reference Lines
         const plotBottomY = currentY;
         if (this.settings.referenceLineSettings.showMilestoneLines) {
             const milestoneHours = [7, 15, 19];
